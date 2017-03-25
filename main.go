@@ -82,6 +82,11 @@ func main() {
 	http.HandleFunc("/db/backup", BackupHandleFunc)
 	http.HandleFunc("/db/stats", StatsHandlerFunc)
 
+	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+	})
+
 	log.Infof("Listening on %s", *listenAddress)
 	log.Fatal(http.ListenAndServe(*listenAddress, nil))
 }
