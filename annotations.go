@@ -70,6 +70,10 @@ func (a *AnnotationHandler) onPost(w http.ResponseWriter, r *http.Request) (int,
 	return http.StatusOK, resp
 }
 
+func (a *AnnotationHandler) onOptions(w http.ResponseWriter, r *http.Request) (int, interface{}) {
+	return http.StatusOK, ""
+}
+
 func (a AnnotationHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	code := http.StatusNotFound
 	var data interface{}
@@ -77,9 +81,14 @@ func (a AnnotationHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "POST":
 		code, data = a.onPost(w, r)
+	case "OPTIONS":
+		code, data = a.onOptions(w, r)
 	}
 
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+	w.Header().Add("Access-Control-Allow-Headers", "accept, content-type")
+	w.Header().Add("Access-Control-Allow-Methods", "POST")
+	w.Header().Add("Access-Control-Allow-Origin", "*")
 	w.WriteHeader(code)
 	if data != nil {
 		if err := json.NewEncoder(w).Encode(data); err != nil {
