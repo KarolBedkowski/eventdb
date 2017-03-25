@@ -9,6 +9,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	_ "net/http/pprof"
 	"time"
@@ -174,4 +175,26 @@ func (e eventsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			log.Errorf("encoding error: %s", err)
 		}
 	}
+}
+
+type humanEventsHandler struct {
+}
+
+func (h humanEventsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+	vars := r.Form
+
+	to := time.Now()
+	from := to.Add(time.Duration(-2) * time.Hour)
+
+	name := vars.Get("name")
+
+	for i, e := range GetEvents(from, to, name) {
+		ts := time.Unix(0, e.Time)
+		w.Write([]byte(fmt.Sprintf("%d. %s Name: %v\nTitle: %s\nText: %s\nTags: %s\n\n",
+			(i + 1), ts, e.Name, e.Title, e.Text, e.Tags)))
+	}
+
+	w.Header().Set("Content-Type", "text/plain; charset=UTF-8")
+	w.WriteHeader(http.StatusOK)
 }
