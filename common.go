@@ -37,5 +37,11 @@ func parseTime(t string) (time.Time, error) {
 		}
 		return time.Unix(ts, 0), nil
 	}
-	return time.Parse(time.RFC3339Nano, t)
+	if ts, err := time.Parse(time.RFC3339Nano, t); err == nil {
+		return ts, nil
+	}
+	if ts, err := time.Parse(time.RFC3339, t); err == nil {
+		return ts, nil
+	}
+	return time.Parse("2006-01-02T15:04:05", t)
 }

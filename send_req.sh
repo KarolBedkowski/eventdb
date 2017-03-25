@@ -17,6 +17,26 @@ function send_event() {
 EOF
 }
 
+
+function generate_events() {
+	local start end d
+	end=$(date +%s)
+	start=$((end - 60000 ))
+
+	for (( d=start; d<end; d=d+600 )); do
+		cat <<EOF | curl -s --data-binary @- "http://localhost:9701/api/v1/event"
+{
+	"name": "",
+	"title": "title $(date --date @$d)",
+	"tags": "",
+	"text": "text for event ${d}",
+	"time": ${d}000000000
+}
+EOF
+	done
+}
+
+
 function get_ann() {
 	cat <<EOF | curl -X POST -s --data-binary @- "http://localhost:9701/annotations"
 {
@@ -35,13 +55,21 @@ function get_events() {
 	curl -X GET -s "http://localhost:9701/api/v1/event"
 }
 
+function get_events_last10min() {
+	local ts
+	ts=$(date --date '10 minutes ago' +%s)
+	curl -X GET -s "http://localhost:9701/api/v1/event?from=${ts}"
+}
+
 
 if [[ $# == 0 ]]; then
 	cat <<EOF
 Usage:
 	$0 send_event
+	$0 generate_events
 	$0 get_ann
 	$0 get_events
+	$0 get_events_last10min
 EOF
 	exit -1
 fi

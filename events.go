@@ -18,30 +18,24 @@ import (
 )
 
 var (
-	eventRequest = prometheus.NewCounter(
+	eventsAdded = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "eventdb_request_total",
-			Help: "Total numbers requests",
-		},
-	)
-	eventPosts = prometheus.NewCounter(
-		prometheus.CounterOpts{
-			Name: "eventdb_posts_total",
+			Name: "eventdb_events_created_total",
 			Help: "Total number events posted",
 		},
+		[]string{"src"},
 	)
-	eventPostsErrors = prometheus.NewCounter(
+	eventAddError = prometheus.NewCounter(
 		prometheus.CounterOpts{
-			Name: "eventdb_posts_errors_total",
-			Help: "Total number errors in posts",
+			Name: "eventdb_events_create_failed_total",
+			Help: "Total number errors when creating events",
 		},
 	)
 )
 
 func init() {
-	prometheus.MustRegister(eventRequest)
-	prometheus.MustRegister(eventPosts)
-	prometheus.MustRegister(eventPostsErrors)
+	prometheus.MustRegister(eventsAdded)
+	prometheus.MustRegister(eventAddError)
 }
 
 type (
@@ -105,6 +99,7 @@ func (e *eventsHandler) onPost(w http.ResponseWriter, r *http.Request) (int, int
 		return http.StatusCreated, "ok"
 	}
 
+	eventAddError.Inc()
 	return http.StatusInternalServerError, "error"
 }
 
@@ -130,19 +125,46 @@ func (e *eventsHandler) onGet(w http.ResponseWriter, r *http.Request) (int, inte
 	return http.StatusOK, events
 }
 
+func (e *eventsHandler) onDelete(w http.ResponseWriter, r *http.Request) (int, interface{}) {
+	r.ParseForm()
+	vars := r.Form
+
+	var from, to time.Time
+
+	if fts, err := parseTime(vars.Get("from")); err == nil {
+		from = fts
+	} else {
+		return http.StatusBadRequest, "wrong 'from' date: " + err.Error()
+	}
+	if tts, err := parseTime(vars.Get("to")); err == nil {
+		to = tts
+	} else {
+		return http.StatusBadRequest, "wrong 'to' date: " + err.Error()
+	}
+
+	if to.Before(from) {
+		return http.StatusBadRequest, "'to' < 'from'"
+	}
+
+	name := vars.Get("name")
+
+	res := make(map[string]int)
+	deleted := DeleteEvents(from, to, name)
+	res["deleted"] = deleted
+	return http.StatusOK, res
+}
+
 func (e eventsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	code := http.StatusNotFound
 	var data interface{}
 
 	switch r.Method {
 	case "POST":
-		eventPosts.Inc()
 		code, data = e.onPost(w, r)
-		if code < 200 || code >= 300 {
-			eventPostsErrors.Inc()
-		}
 	case "GET":
 		code, data = e.onGet(w, r)
+	case "DELETE":
+		code, data = e.onDelete(w, r)
 	}
 
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")

@@ -50,9 +50,11 @@ type (
 )
 
 func (k KV) String() string {
-	out := make([]string, len(k))
+	out := make([]string, 0, len(k))
 	for k, v := range k {
-		if v != "" {
+		k = strings.TrimSpace(k)
+		v = strings.TrimSpace(v)
+		if k != "" && v != "" {
 			out = append(out, fmt.Sprintf("%s: %s", k, v))
 		}
 	}
@@ -73,22 +75,23 @@ func (p *PromWebHookHandler) onPost(w http.ResponseWriter, r *http.Request) (int
 			Time: a.StartsAt.UnixNano(),
 		}
 		if v, ok := a.Annotations["summary"]; ok {
-			e.Title = fmt.Sprintf("[%s] %s", a.Status, v)
+			e.Title = fmt.Sprintf("[%s] %s", a.Status, strings.TrimSpace(v))
 		} else {
 			e.Title = fmt.Sprintf("[%s]", a.Status)
 		}
 		if v, ok := a.Annotations["description"]; ok {
-			e.Text = v
+			e.Text = strings.TrimSpace(v)
 		}
 		if e.Text == "" {
 			e.Text = a.Annotations.String()
 		}
 		e.Tags = a.Labels.String()
 		if v, ok := a.Labels["name"]; ok {
-			e.Name = v
+			e.Name = strings.TrimSpace(v)
 		}
 		if err := SaveEvent(e); err != nil {
 			log.Errorf("save event error: %s", err)
+			eventAddError.Inc()
 		}
 	}
 
@@ -102,9 +105,6 @@ func (p PromWebHookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "POST":
 		code, data = p.onPost(w, r)
-		if code < 200 || code >= 300 {
-			eventPostsErrors.Inc()
-		}
 	}
 
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")

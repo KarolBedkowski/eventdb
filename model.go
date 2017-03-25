@@ -98,12 +98,28 @@ func decodeEvent(e []byte) (*Event, error) {
 func decodeEventTS(k []byte) (int64, error) {
 	var ts int64
 	buf := bytes.NewReader(k[:8])
-	err := binary.Read(buf, binary.LittleEndian, &ts)
+	err := binary.Read(buf, binary.BigEndian, &ts)
 	if err != nil {
 		log.Errorf("decodeEventTS failed:", err)
 		return 0, err
 	}
 	return ts, nil
+}
+
+func encodeEventTS(ts int64, data []byte) ([]byte, error) {
+	key := new(bytes.Buffer)
+	if err := binary.Write(key, binary.BigEndian, ts); err != nil {
+		log.Errorf("event encode error: %s", err)
+		return nil, err
+	}
+	if data == nil {
+		key.Write([]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0})
+	} else {
+		h := md5.New()
+		h.Write(data)
+		key.Write(h.Sum(nil))
+	}
+	return key.Bytes(), nil
 }
 
 func (e *Event) encode() ([]byte, []byte, error) {
@@ -115,18 +131,12 @@ func (e *Event) encode() ([]byte, []byte, error) {
 		return nil, nil, err
 	}
 
-	data := r.Bytes()
-	key := new(bytes.Buffer)
-	if err := binary.Write(key, binary.LittleEndian, e.Time); err != nil {
-		log.Errorf("event encode error: %s", err)
-		return nil, nil, err
-	}
-	h := md5.New()
-	key.Write(h.Sum(data))
-	return r.Bytes(), key.Bytes(), nil
+	key, err := encodeEventTS(e.Time, r.Bytes())
+	return r.Bytes(), key, err
 }
 
 func SaveEvent(e *Event) error {
+	log.Debugf("SaveEvent: %+v", e)
 	return db.db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("events"))
 		data, key, err := e.encode()
@@ -143,7 +153,6 @@ func GetEvents(from, to time.Time, name string) []*Event {
 	if t < f {
 		return nil
 	}
-	// TODO: move curson on first event
 
 	events := make([]*Event, 0, 100)
 
@@ -151,7 +160,9 @@ func GetEvents(from, to time.Time, name string) []*Event {
 		b := tx.Bucket([]byte("events"))
 		c := b.Cursor()
 
-		for k, v := c.First(); k != nil; k, v = c.Next() {
+		fkey, _ := encodeEventTS(f, nil)
+
+		for k, v := c.Seek(fkey); k != nil; k, v = c.Next() {
 			if ts, err := decodeEventTS(k); err != nil || ts < f || ts > t {
 				log.Debugf("e ts: %v", ts)
 				continue
@@ -166,6 +177,57 @@ func GetEvents(from, to time.Time, name string) []*Event {
 	})
 
 	return events
+}
+
+func DeleteEvents(from, to time.Time, name string) int {
+	f := from.UnixNano()
+	t := to.UnixNano()
+
+	toDelete := make([][]byte, 0)
+
+	db.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("events"))
+		c := b.Cursor()
+
+		fkey, _ := encodeEventTS(f, nil)
+
+		for k, v := c.Seek(fkey); k != nil; k, v = c.Next() {
+			if ts, err := decodeEventTS(k); err != nil || ts < f || ts > t {
+				log.Debugf("e ts: %v", ts)
+				continue
+			}
+			if name != "" {
+				if e, err := decodeEvent(v); err == nil {
+					if name != e.Name {
+						continue
+					}
+				}
+			}
+			toDelete = append(toDelete, k)
+		}
+		return nil
+	})
+
+	if len(toDelete) == 0 {
+		return 0
+	}
+
+	err := db.db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("events"))
+		for _, k := range toDelete {
+			if err := b.Delete(k); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+
+	if err != nil {
+		log.Errorf("event delete error: %s", err.Error())
+		return 0
+	}
+
+	return len(toDelete)
 }
 
 func BackupHandleFunc(w http.ResponseWriter, req *http.Request) {

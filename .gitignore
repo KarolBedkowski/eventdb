@@ -1,0 +1,5 @@
+eventdb
+eventdb.boltdb
+.*
+*~
+tags

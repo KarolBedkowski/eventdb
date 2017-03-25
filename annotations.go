@@ -77,9 +77,6 @@ func (a AnnotationHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "POST":
 		code, data = a.onPost(w, r)
-		if code < 200 || code >= 300 {
-			eventPostsErrors.Inc()
-		}
 	}
 
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")

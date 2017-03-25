@@ -76,6 +76,9 @@ func main() {
 	http.Handle("/api/v1/promwebhook", prometheus.InstrumentHandler("api-v1-promwebhook", pwh))
 
 	http.Handle("/metrics", promhttp.Handler())
+	http.HandleFunc("/db/backup", BackupHandleFunc)
+	http.HandleFunc("/db/stats", StatsHandlerFunc)
+
 	log.Infof("Listening on %s", *listenAddress)
 	log.Fatal(http.ListenAndServe(*listenAddress, nil))
 }
