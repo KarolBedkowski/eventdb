@@ -95,8 +95,20 @@ func DBClose() error {
 }
 
 func decodeEvent(e []byte) (*Event, error) {
-	ev := &Event{}
+	/*
+		b := bytes.NewReader(e)
+		var r io.Reader
+		if zr, err := zlib.NewReader(b); err == nil {
+			defer zr.Close()
+			r = zr
+		} else {
+			r = bytes.NewBuffer(e)
+		}
+	*/
+
 	r := bytes.NewBuffer(e)
+
+	ev := &Event{}
 	dec := gob.NewDecoder(r)
 	if err := dec.Decode(ev); err != nil {
 		log.Warnf("decodeEvent decode error: %s", err)
@@ -143,6 +155,19 @@ func (e *Event) encode() ([]byte, []byte, error) {
 
 	key, err := encodeEventTS(e.Time, r.Bytes())
 	e.key = key
+
+	/*
+		// compress content
+		var b bytes.Buffer
+		w, _ := zlib.NewWriterLevel(&b, zlib.BestCompression)
+		w.Write(r.Bytes())
+		w.Close()
+
+		log.Debugf("encode %d -> %d", r.Len(), b.Len())
+
+
+		return b.Bytes(), key, err
+	*/
 	return r.Bytes(), key, err
 }
 
