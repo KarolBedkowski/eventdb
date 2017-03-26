@@ -190,6 +190,8 @@ func (h humanEventsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	name := vars.Get("name")
 
+	w.Write([]byte(fmt.Sprintf("Events from %s to %s\n\n", from, to)))
+
 	for i, e := range GetEvents(from, to, name) {
 		ts := time.Unix(0, e.Time)
 		w.Write([]byte(fmt.Sprintf("%d. %s Name: %v\nTitle: %s\nText: %s\nTags: %s\n\n",
