@@ -95,6 +95,8 @@ func (p *PromWebHookHandler) onPost(w http.ResponseWriter, r *http.Request) (int
 		if err := SaveEvent(e); err != nil {
 			log.Errorf("save event error: %s", err)
 			eventAddError.Inc()
+		} else {
+			eventsAdded.WithLabelValues("api-v1-promwebhook-post").Inc()
 		}
 	}
 

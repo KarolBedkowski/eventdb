@@ -28,7 +28,7 @@ var (
 	)
 	eventAddError = prometheus.NewCounter(
 		prometheus.CounterOpts{
-			Name: "eventdb_events_create_failed_total",
+			Name: "eventdb_events_failed_total",
 			Help: "Total number errors when creating events",
 		},
 	)
@@ -97,6 +97,7 @@ func (e *eventsHandler) onPost(w http.ResponseWriter, r *http.Request) (int, int
 	}
 
 	if err := SaveEvent(event); err == nil {
+		eventsAdded.WithLabelValues("api-v1-event-post").Inc()
 		return http.StatusCreated, "ok"
 	}
 
