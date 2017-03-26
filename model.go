@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"encoding/gob"
 	"encoding/json"
+	"fmt"
 	"github.com/boltdb/bolt"
 	p "github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/log"
@@ -37,7 +38,11 @@ type (
 
 var (
 	db = &DB{}
+
+	defaultBucket = []byte("__default__")
 )
+
+const AnyBucket = "_any_"
 
 func init() {
 	gob.Register(&Event{})
@@ -61,7 +66,7 @@ func DBOpen(filename string) (err error) {
 
 	err = bdb.Update(func(tx *bolt.Tx) error {
 		var err error
-		_, err = tx.CreateBucketIfNotExists([]byte("events"))
+		_, err = tx.CreateBucketIfNotExists(defaultBucket)
 		if err != nil {
 			panic("DB.open create bucket error" + err.Error())
 		}
@@ -138,7 +143,11 @@ func (e *Event) encode() ([]byte, []byte, error) {
 func SaveEvent(e *Event) error {
 	log.Debugf("SaveEvent: %+v", e)
 	return db.db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte("events"))
+		name := defaultBucket
+		if e.Name != "" {
+			name = []byte(e.Name)
+		}
+		b, err := tx.CreateBucketIfNotExists(name)
 		data, key, err := e.encode()
 		if err == nil {
 			return b.Put(key, data)
@@ -147,31 +156,53 @@ func SaveEvent(e *Event) error {
 	})
 }
 
+func getEventsFromBuckets(f, t int64, b *bolt.Bucket) []*Event {
+	events := make([]*Event, 0, 100)
+	c := b.Cursor()
+	fkey, _ := encodeEventTS(f, nil)
+
+	for k, v := c.Seek(fkey); k != nil; k, v = c.Next() {
+		if ts, err := decodeEventTS(k); err != nil || ts < f || ts > t {
+			log.Debugf("e ts: %v", ts)
+			continue
+		}
+		if e, err := decodeEvent(v); err == nil {
+			events = append(events, e)
+		}
+	}
+
+	return events
+}
+
 func GetEvents(from, to time.Time, name string) []*Event {
+	log.Debugf("GetEvents %s - %s [%s]", from, to, name)
+
 	f := from.UnixNano()
 	t := to.UnixNano()
 	if t < f {
 		return nil
 	}
 
-	events := make([]*Event, 0, 100)
+	events := make([]*Event, 0, 0)
 
 	db.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte("events"))
-		c := b.Cursor()
-
-		fkey, _ := encodeEventTS(f, nil)
-
-		for k, v := c.Seek(fkey); k != nil; k, v = c.Next() {
-			if ts, err := decodeEventTS(k); err != nil || ts < f || ts > t {
-				log.Debugf("e ts: %v", ts)
-				continue
+		if name == AnyBucket {
+			return tx.ForEach(func(name []byte, b *bolt.Bucket) error {
+				es := getEventsFromBuckets(f, t, b)
+				events = append(events, es...)
+				return nil
+			})
+		} else {
+			bname := defaultBucket
+			if name != "" {
+				bname = []byte(name)
 			}
-			if e, err := decodeEvent(v); err == nil {
-				if name == "" || name == e.Name {
-					events = append(events, e)
-				}
+
+			b := tx.Bucket([]byte(bname))
+			if b == nil {
+				return fmt.Errorf("unknown bucket name: %v", name)
 			}
+			events = getEventsFromBuckets(f, t, b)
 		}
 		return nil
 	})
@@ -179,46 +210,61 @@ func GetEvents(from, to time.Time, name string) []*Event {
 	return events
 }
 
+func getEventsKeyFromBucket(f, t int64, b *bolt.Bucket) [][]byte {
+	keys := make([][]byte, 0, 100)
+	c := b.Cursor()
+	fkey, _ := encodeEventTS(f, nil)
+
+	for k, _ := c.Seek(fkey); k != nil; k, _ = c.Next() {
+		if ts, err := decodeEventTS(k); err != nil || ts < f || ts > t {
+			continue
+		}
+
+		keys = append(keys, k)
+	}
+
+	return keys
+}
+
 func DeleteEvents(from, to time.Time, name string) int {
 	f := from.UnixNano()
 	t := to.UnixNano()
 
-	toDelete := make([][]byte, 0)
-
-	db.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte("events"))
-		c := b.Cursor()
-
-		fkey, _ := encodeEventTS(f, nil)
-
-		for k, v := c.Seek(fkey); k != nil; k, v = c.Next() {
-			if ts, err := decodeEventTS(k); err != nil || ts < f || ts > t {
-				log.Debugf("e ts: %v", ts)
-				continue
-			}
-			if name != "" {
-				if e, err := decodeEvent(v); err == nil {
-					if name != e.Name {
-						continue
-					}
-				}
-			}
-			toDelete = append(toDelete, k)
-		}
-		return nil
-	})
-
-	if len(toDelete) == 0 {
-		return 0
-	}
+	deleted := 0
 
 	err := db.db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte("events"))
-		for _, k := range toDelete {
-			if err := b.Delete(k); err != nil {
-				return err
+
+		if name == AnyBucket {
+			tx.ForEach(func(name []byte, b *bolt.Bucket) error {
+				keys := getEventsKeyFromBucket(f, t, b)
+				deleted += len(keys)
+
+				for _, k := range keys {
+					if err := b.Delete(k); err != nil {
+						return err
+					}
+				}
+
+				return nil
+			})
+		} else {
+			bname := defaultBucket
+			if name != "" {
+				bname = []byte(name)
+			}
+			b := tx.Bucket(bname)
+			if b == nil {
+				return fmt.Errorf("unknown bucket name: %v", name)
+			}
+			keys := getEventsKeyFromBucket(f, t, b)
+			deleted += len(keys)
+			for _, k := range keys {
+				if err := b.Delete(k); err != nil {
+					return err
+				}
 			}
 		}
+
 		return nil
 	})
 
@@ -227,7 +273,7 @@ func DeleteEvents(from, to time.Time, name string) int {
 		return 0
 	}
 
-	return len(toDelete)
+	return deleted
 }
 
 func BackupHandleFunc(w http.ResponseWriter, req *http.Request) {

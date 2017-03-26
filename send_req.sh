@@ -26,7 +26,7 @@ function generate_events() {
 	for (( d=start; d<end; d=d+600 )); do
 		cat <<EOF | curl -s --data-binary @- "http://localhost:9701/api/v1/event"
 {
-	"name": "",
+	"name": "testname",
 	"title": "title $(date --date @$d)",
 	"tags": "",
 	"text": "text for event ${d}",

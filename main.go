@@ -127,7 +127,7 @@ func (v *vacuumWorker) Start() {
 				if err == nil {
 					to := time.Now().Add(-retention)
 					from := time.Time{}
-					deleted := DeleteEvents(from, to, "")
+					deleted := DeleteEvents(from, to, AnyBucket)
 					log.Infof("vacuum deleted %d to %s", deleted, to)
 					deletedCntr.Add(float64(deleted))
 					lastRun.SetToCurrentTime()

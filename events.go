@@ -189,15 +189,18 @@ func (h humanEventsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	from := to.Add(time.Duration(-2) * time.Hour)
 
 	name := vars.Get("name")
+	if name == "" {
+		name = "_any_"
+	}
 
-	w.Write([]byte(fmt.Sprintf("Events from %s to %s\n\n", from, to)))
+	w.Header().Set("Content-Type", "text/plain; charset=UTF-8")
+	w.WriteHeader(http.StatusOK)
+
+	w.Write([]byte(fmt.Sprintf("Events for %s from %s to %s\n\n", name, from, to)))
 
 	for i, e := range GetEvents(from, to, name) {
 		ts := time.Unix(0, e.Time)
 		w.Write([]byte(fmt.Sprintf("%d. %s Name: %v\nTitle: %s\nText: %s\nTags: %s\n\n",
 			(i + 1), ts, e.Name, e.Title, e.Text, e.Tags)))
 	}
-
-	w.Header().Set("Content-Type", "text/plain; charset=UTF-8")
-	w.WriteHeader(http.StatusOK)
 }
