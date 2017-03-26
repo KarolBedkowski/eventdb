@@ -33,6 +33,10 @@ type (
 		Time int64
 		Text string
 		Tags string
+
+		// internals
+		key    []byte
+		bucket []byte
 	}
 )
 
@@ -137,6 +141,7 @@ func (e *Event) encode() ([]byte, []byte, error) {
 	}
 
 	key, err := encodeEventTS(e.Time, r.Bytes())
+	e.key = key
 	return r.Bytes(), key, err
 }
 
@@ -156,7 +161,7 @@ func SaveEvent(e *Event) error {
 	})
 }
 
-func getEventsFromBuckets(f, t int64, b *bolt.Bucket) []*Event {
+func getEventsFromBucket(f, t int64, b *bolt.Bucket, bname []byte) []*Event {
 	events := make([]*Event, 0, 100)
 	c := b.Cursor()
 	fkey, _ := encodeEventTS(f, nil)
@@ -167,6 +172,8 @@ func getEventsFromBuckets(f, t int64, b *bolt.Bucket) []*Event {
 			continue
 		}
 		if e, err := decodeEvent(v); err == nil {
+			e.key = k
+			e.bucket = bname
 			events = append(events, e)
 		}
 	}
@@ -188,7 +195,7 @@ func GetEvents(from, to time.Time, name string) []*Event {
 	db.db.View(func(tx *bolt.Tx) error {
 		if name == AnyBucket {
 			return tx.ForEach(func(name []byte, b *bolt.Bucket) error {
-				es := getEventsFromBuckets(f, t, b)
+				es := getEventsFromBucket(f, t, b, name)
 				events = append(events, es...)
 				return nil
 			})
@@ -198,11 +205,11 @@ func GetEvents(from, to time.Time, name string) []*Event {
 				bname = []byte(name)
 			}
 
-			b := tx.Bucket([]byte(bname))
+			b := tx.Bucket(bname)
 			if b == nil {
 				return fmt.Errorf("unknown bucket name: %v", name)
 			}
-			events = getEventsFromBuckets(f, t, b)
+			events = getEventsFromBucket(f, t, b, bname)
 		}
 		return nil
 	})

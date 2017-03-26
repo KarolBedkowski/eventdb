@@ -1,2 +1,3 @@
 database: eventdb.boltdb
 retention: 2160h
+debug: true

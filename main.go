@@ -54,24 +54,6 @@ func main() {
 
 	apiHandler := eventsHandler{Configuration: c}
 
-	// handle hup for reloading configuration
-	hup := make(chan os.Signal)
-	signal.Notify(hup, syscall.SIGHUP)
-	go func() {
-		for {
-			select {
-			case <-hup:
-				if newConf, err := loadConfiguration(*configFile); err == nil {
-					apiHandler.Configuration = newConf
-					vw.Configuration = newConf
-					log.Info("configuration reloaded")
-				} else {
-					log.Errorf("reloading configuration err: %s", err)
-					log.Errorf("using old configuration")
-				}
-			}
-		}
-	}()
 	http.Handle("/api/v1/event", prometheus.InstrumentHandler("api-v1-event", apiHandler))
 
 	ah := AnnotationHandler{}
@@ -80,7 +62,7 @@ func main() {
 	pwh := PromWebHookHandler{}
 	http.Handle("/api/v1/promwebhook", prometheus.InstrumentHandler("api-v1-promwebhook", pwh))
 
-	hh := humanEventsHandler{}
+	hh := humanEventsHandler{Configuration: c}
 	http.Handle("/last", hh)
 
 	http.Handle("/metrics", promhttp.Handler())
@@ -91,6 +73,26 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("ok"))
 	})
+
+	// handle hup for reloading configuration
+	hup := make(chan os.Signal)
+	signal.Notify(hup, syscall.SIGHUP)
+	go func() {
+		for {
+			select {
+			case <-hup:
+				if newConf, err := loadConfiguration(*configFile); err == nil {
+					apiHandler.Configuration = newConf
+					vw.Configuration = newConf
+					hh.Configuration = newConf
+					log.Info("configuration reloaded")
+				} else {
+					log.Errorf("reloading configuration err: %s", err)
+					log.Errorf("using old configuration")
+				}
+			}
+		}
+	}()
 
 	log.Infof("Listening on %s", *listenAddress)
 	log.Fatal(http.ListenAndServe(*listenAddress, nil))

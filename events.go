@@ -179,6 +179,7 @@ func (e eventsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 type humanEventsHandler struct {
+	Configuration *Configuration
 }
 
 func (h humanEventsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -200,7 +201,11 @@ func (h humanEventsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	for i, e := range GetEvents(from, to, name) {
 		ts := time.Unix(0, e.Time)
-		w.Write([]byte(fmt.Sprintf("%d. %s Name: %v\nTitle: %s\nText: %s\nTags: %s\n\n",
+		w.Write([]byte(fmt.Sprintf("%d. %s   Name: %v\nTitle: %s\nText: %s\nTags: %s\n",
 			(i + 1), ts, e.Name, e.Title, e.Text, e.Tags)))
+		if h.Configuration.Debug {
+			w.Write([]byte(fmt.Sprintf("bucket: %s   key: %x\n", string(e.bucket), e.key)))
+		}
+		w.Write([]byte{'\n', '\n'})
 	}
 }

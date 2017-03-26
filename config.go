@@ -16,6 +16,7 @@ type (
 	Configuration struct {
 		DBFile    string
 		Retention string
+		Debug     bool
 	}
 )
 
