@@ -45,7 +45,7 @@ func init() {
 }
 
 func DBOpen(filename string) (err error) {
-	log.Debug("globals.openDatabases START %s", filename)
+	log.Debugf("globals.openDatabases START %s", filename)
 
 	db.dbFilename = filename
 

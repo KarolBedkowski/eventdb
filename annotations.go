@@ -51,7 +51,7 @@ func (a *AnnotationHandler) onPost(w http.ResponseWriter, r *http.Request) (int,
 		return 442, "bad request"
 	}
 
-	log.Debugf("annotation post %+v", ar)
+	log.Debugf("annotation post %v %+v", r.URL, ar)
 
 	from, _ := parseTime(ar.Range.From)
 	to, _ := parseTime(ar.Range.To)
