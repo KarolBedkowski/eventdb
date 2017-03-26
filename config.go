@@ -14,9 +14,9 @@ import (
 type (
 	// Configuration keep application configuration
 	Configuration struct {
-		DBFile    string
-		Retention string
-		Debug     bool
+		DBFile    string `yaml:"dbfile"`
+		Retention string `yaml:"retention"`
+		Debug     bool   `yaml:"debug"`
 	}
 )
 
