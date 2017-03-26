@@ -74,13 +74,9 @@ func main() {
 	http.Handle("/last", hh)
 
 	http.Handle("/metrics", promhttp.Handler())
-	http.HandleFunc("/db/backup", BackupHandleFunc)
-	http.HandleFunc("/db/stats", StatsHandlerFunc)
 
-	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("ok"))
-	})
+	// database endpoints
+	http.Handle("/db/", http.StripPrefix("/db", NewDBInternalPagesHandler()))
 
 	// handle hup for reloading configuration
 	hup := make(chan os.Signal)
@@ -90,6 +86,7 @@ func main() {
 			select {
 			case <-hup:
 				if newConf, err := loadConfiguration(*configFile); err == nil {
+					log.Debugf("new configuration: %+v", newConf)
 					apiHandler.Configuration = newConf
 					vw.Configuration = newConf
 					hh.Configuration = newConf

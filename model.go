@@ -287,7 +287,18 @@ func DeleteEvents(from, to time.Time, name string) int {
 	return deleted
 }
 
-func BackupHandleFunc(w http.ResponseWriter, req *http.Request) {
+func NewDBInternalPagesHandler() http.Handler {
+	h := &dbInternalHandler{}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/backup", h.backup)
+	mux.HandleFunc("/stats", h.stats)
+	return mux
+}
+
+type dbInternalHandler struct {
+}
+
+func (d *dbInternalHandler) backup(w http.ResponseWriter, req *http.Request) {
 	err := db.db.View(func(tx *bolt.Tx) error {
 		w.Header().Set("Content-Type", "application/octet-stream")
 		w.Header().Set("Content-Disposition", `attachment; filename="`+db.dbFilename+`"`)
@@ -300,7 +311,7 @@ func BackupHandleFunc(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func StatsHandlerFunc(w http.ResponseWriter, req *http.Request) {
+func (d *dbInternalHandler) stats(w http.ResponseWriter, req *http.Request) {
 	stats := db.db.Stats()
 	db.statsDiff = db.stats.Sub(&db.stats)
 	db.stats = stats
