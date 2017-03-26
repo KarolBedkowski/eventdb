@@ -153,6 +153,10 @@ func SaveEvent(e *Event) error {
 			name = []byte(e.Name)
 		}
 		b, err := tx.CreateBucketIfNotExists(name)
+		if err != nil {
+			return err
+		}
+		b.FillPercent = 0.95
 		data, key, err := e.encode()
 		if err == nil {
 			return b.Put(key, data)
