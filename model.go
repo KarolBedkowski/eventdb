@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/boltdb/bolt"
+	"github.com/boltdb/boltd"
 	p "github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/log"
 	"net/http"
@@ -292,6 +293,8 @@ func NewDBInternalPagesHandler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/backup", h.backup)
 	mux.HandleFunc("/stats", h.stats)
+	// Tests
+	mux.Handle("/introspection/", http.StripPrefix("/introspection", boltd.NewHandler(db.db)))
 	return mux
 }
 
