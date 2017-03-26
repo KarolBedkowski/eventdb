@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -48,6 +49,9 @@ func main() {
 
 	DBOpen(c.DBFile)
 
+	vw := vacuumWorker{Configuration: c}
+	vw.Start()
+
 	apiHandler := eventsHandler{Configuration: c}
 
 	// handle hup for reloading configuration
@@ -59,6 +63,7 @@ func main() {
 			case <-hup:
 				if newConf, err := loadConfiguration(*configFile); err == nil {
 					apiHandler.Configuration = newConf
+					vw.Configuration = newConf
 					log.Info("configuration reloaded")
 				} else {
 					log.Errorf("reloading configuration err: %s", err)
@@ -89,4 +94,48 @@ func main() {
 
 	log.Infof("Listening on %s", *listenAddress)
 	log.Fatal(http.ListenAndServe(*listenAddress, nil))
+}
+
+type vacuumWorker struct {
+	Configuration *Configuration
+}
+
+func (v *vacuumWorker) Start() {
+
+	deletedCntr := prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "eventdb_vacuum_events_deleted_total",
+			Help: "Total number events deleted by vacuum worker",
+		},
+	)
+
+	lastRun := prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "eventdb_vacuum_last_run_unix",
+			Help: "Last run of vacuum routine.",
+		},
+	)
+
+	prometheus.MustRegister(deletedCntr)
+	prometheus.MustRegister(lastRun)
+
+	go func() {
+		time.Sleep(1 * time.Minute)
+		for {
+			if v.Configuration.Retention != "" {
+				retention, err := time.ParseDuration(v.Configuration.Retention)
+				if err == nil {
+					to := time.Now().Add(-retention)
+					from := time.Time{}
+					deleted := DeleteEvents(from, to, "")
+					log.Infof("vacuum deleted %d to %s", deleted, to)
+					deletedCntr.Add(float64(deleted))
+					lastRun.SetToCurrentTime()
+				} else {
+					log.Errorf("vacuumWorker parse duration error: %s", err.Error())
+				}
+				time.Sleep(30 * time.Minute)
+			}
+		}
+	}()
 }

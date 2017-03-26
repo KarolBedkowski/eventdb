@@ -14,7 +14,8 @@ import (
 type (
 	// Configuration keep application configuration
 	Configuration struct {
-		DBFile string
+		DBFile    string
+		Retention string
 	}
 )
 
