@@ -52,8 +52,16 @@ func main() {
 	vw := vacuumWorker{Configuration: c}
 	vw.Start()
 
-	apiHandler := eventsHandler{Configuration: c}
+	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
+		if req.URL.Path != "/" {
+			http.NotFound(w, req)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+	})
 
+	apiHandler := eventsHandler{Configuration: c}
 	http.Handle("/api/v1/event", prometheus.InstrumentHandler("api-v1-event", apiHandler))
 
 	ah := AnnotationHandler{}
