@@ -116,10 +116,21 @@ func (e *eventsHandler) onGet(w http.ResponseWriter, r *http.Request) (int, inte
 			log.Errorf("wrong to date: %s", err.Error())
 		}
 	}
-	name := vars.Get("name")
+
+	name, tags := parseName(vars.Get("name"))
 
 	events := e.DB.GetEvents(from, to, name)
-	return http.StatusOK, events
+	if tags == nil || len(tags) == 0 {
+		return http.StatusOK, events
+	}
+
+	resp := make([]*Event, 0, len(events))
+	for _, e := range events {
+		if e.CheckTags(tags) {
+			resp = append(resp, e)
+		}
+	}
+	return http.StatusOK, resp
 }
 
 func (e *eventsHandler) onDelete(w http.ResponseWriter, r *http.Request) (int, interface{}) {
@@ -185,7 +196,7 @@ func (h humanEventsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	to := time.Now()
 	from := to.Add(time.Duration(-2) * time.Hour)
 
-	name := vars.Get("name")
+	name, tags := parseName(vars.Get("name"))
 	if name == "" {
 		name = "_any_"
 	}
@@ -196,6 +207,9 @@ func (h humanEventsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(fmt.Sprintf("Events for %s from %s to %s\n\n", name, from, to)))
 
 	for i, e := range h.DB.GetEvents(from, to, name) {
+		if !e.CheckTags(tags) {
+			continue
+		}
 		ts := time.Unix(0, e.Time)
 		w.Write([]byte(fmt.Sprintf("%d. %s   Name: %v\nTitle: %s\nText: %s\nTags: %s\n",
 			(i + 1), ts, e.Name, e.Title, e.Text, e.Tags)))

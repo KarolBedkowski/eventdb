@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"github.com/prometheus/common/log"
 	"net/http"
-	"strings"
 )
 
 type (
@@ -57,18 +56,11 @@ func (a *AnnotationHandler) onPost(w http.ResponseWriter, r *http.Request) (int,
 
 	from, _ := parseTime(ar.Range.From)
 	to, _ := parseTime(ar.Range.To)
-	var name string
-	var tags []string
 
-	if ar.Annotation.Name != "" {
-		fields := strings.Split(ar.Annotation.Name, ":")
-		name = fields[0]
-		if len(fields) > 1 {
-			tags = fields[1:]
-		}
-	}
+	name, tags := parseName(ar.Annotation.Name)
 
 	events := a.DB.GetEvents(from, to, name)
+
 	resp := make([]annotationResp, 0, len(events))
 	for _, e := range events {
 		if !e.CheckTags(tags) {
