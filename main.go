@@ -145,7 +145,7 @@ func (v *vacuumWorker) Start() {
 				} else {
 					log.Errorf("vacuumWorker parse duration error: %s", err.Error())
 				}
-				time.Sleep(30 * time.Minute)
+				time.Sleep(3 * time.Hour)
 			}
 		}
 	}()
