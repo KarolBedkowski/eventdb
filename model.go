@@ -149,7 +149,7 @@ func (db *DB) SaveEvent(e *Event) error {
 		if err != nil {
 			return err
 		}
-		b.FillPercent = 0.95
+		b.FillPercent = 0.99
 		data, key, err := e.encode()
 		if err == nil {
 			return b.Put(key, data)
