@@ -77,7 +77,7 @@ func encodeEventTS(ts int64, data []byte) ([]byte, error) {
 		return nil, err
 	}
 	if data == nil {
-		key.Write([]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0})
+		//		key.Write([]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0})
 	} else {
 		h := md5.New()
 		h.Write(data)
