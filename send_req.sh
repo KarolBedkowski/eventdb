@@ -39,6 +39,24 @@ EOF
 	done
 }
 
+function generate_events2() {
+	local start end d local t1 v1
+	now=$(date +%s)
+
+	for (( d=0; d<10; d=d+1 )); do
+		cat <<EOF | curl -s --data-binary @- "http://localhost:9701/api/v1/event"
+{
+	"name": "testname",
+	"title": "title $now",
+	"tags": "t$d",
+	"text": "text for event ${d}",
+	"time": ${now}000000000
+}
+EOF
+	done
+}
+
+
 
 function generate_events_pi() {
 	local start end d
@@ -60,14 +78,14 @@ EOF
 
 
 function get_ann() {
-	cat <<EOF | curl -X POST -s --data-binary @- "http://localhost:9701/annotations"
+	cat <<EOF | curl -X POST -s --data-binary @- "http://${1:-localhost}:9701/annotations"
 {
   "range": { "from": "2016-03-04T04:07:55.144Z", "to": "2018-03-04T07:07:55.144Z" },
   "rangeRaw": { "from": "", "to": "" },
   "annotation": {
     "datasource": "generic datasource",
     "enable": true,
-    "name": "testname:v0"
+    "name": "${2:-testname}"
   }
 }
 EOF
