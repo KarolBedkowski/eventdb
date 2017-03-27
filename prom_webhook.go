@@ -46,6 +46,7 @@ type (
 	}
 
 	PromWebHookHandler struct {
+		DB *DB
 	}
 )
 
@@ -92,7 +93,7 @@ func (p *PromWebHookHandler) onPost(w http.ResponseWriter, r *http.Request) (int
 		if v, ok := a.Labels["name"]; ok {
 			e.Name = strings.TrimSpace(v)
 		}
-		if err := SaveEvent(e); err != nil {
+		if err := p.DB.SaveEvent(e); err != nil {
 			log.Errorf("save event error: %s", err)
 			eventAddError.Inc()
 		} else {

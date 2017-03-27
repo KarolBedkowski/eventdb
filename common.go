@@ -18,21 +18,24 @@ func parseTime(t string) (time.Time, error) {
 		return time.Time{}, fmt.Errorf("empty time")
 	}
 	if ts, err := strconv.ParseFloat(t, 64); err == nil {
-		if ts > 1000000000000000 { // nanos
+		if ts > 1000000000000000000 { // nanos
+			fmt.Printf("try float nanos %v", ts)
 			return time.Unix(0, int64(ts)), nil
-		} else if ts > 1000000000000 { // micros
+		} else if ts > 1000000000000000 { // micros
+			fmt.Printf("try float micros %v", ts)
 			return time.Unix(0, int64(ts*1000)), nil
-		} else if ts > 1000000000 { // milils
+		} else if ts > 1000000000000 { // milils
+			fmt.Printf("try float millis %v", ts)
 			return time.Unix(0, int64(ts*1000000)), nil
 		}
 		return time.Unix(int64(ts), 0), nil
 	}
 	if ts, err := strconv.ParseInt(t, 10, 64); err == nil {
-		if ts > 1000000000000000 { // nanos
+		if ts > 1000000000000000000 { // nanos
 			return time.Unix(0, ts), nil
-		} else if ts > 1000000000000 { // micros
+		} else if ts > 1000000000000000 { // micros
 			return time.Unix(0, ts*1000), nil
-		} else if ts > 1000000000 { // milils
+		} else if ts > 1000000000000 { // milils
 			return time.Unix(0, ts*1000000), nil
 		}
 		return time.Unix(ts, 0), nil
@@ -44,4 +47,15 @@ func parseTime(t string) (time.Time, error) {
 		return ts, nil
 	}
 	return time.Parse("2006-01-02T15:04:05", t)
+}
+
+func numToUnixNano(ts int64) int64 {
+	if ts > 1000000000000000000 { // nanos
+		return ts
+	} else if ts > 1000000000000000 { // micros
+		return ts * 1000
+	} else if ts > 1000000000000 { // milils
+		return ts * 1000000
+	}
+	return ts * 1000000000
 }

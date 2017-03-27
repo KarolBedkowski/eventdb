@@ -42,6 +42,7 @@ func init() {
 type (
 	eventsHandler struct {
 		Configuration *Configuration
+		DB            *DB
 	}
 
 	eventReq struct {
@@ -52,17 +53,6 @@ type (
 		Tags  string
 	}
 )
-
-func numToTs(ts int64) int64 {
-	if ts > 1000000000000000 { // nanos
-		return ts
-	} else if ts > 1000000000000 { // micros
-		return ts * 1000
-	} else if ts > 1000000000 { // milils
-		return ts * 1000000
-	}
-	return ts * 1000000000
-}
 
 func (e *eventsHandler) onPost(w http.ResponseWriter, r *http.Request) (int, interface{}) {
 	ev := &eventReq{}
@@ -80,9 +70,9 @@ func (e *eventsHandler) onPost(w http.ResponseWriter, r *http.Request) (int, int
 
 	switch ev.Time.(type) {
 	case int64:
-		event.Time = numToTs(ev.Time.(int64))
+		event.Time = numToUnixNano(ev.Time.(int64))
 	case float64:
-		event.Time = numToTs(int64(ev.Time.(float64)))
+		event.Time = numToUnixNano(int64(ev.Time.(float64)))
 	case string:
 		if t, err := time.Parse(time.RFC3339Nano, ev.Time.(string)); err == nil {
 			event.Time = t.UnixNano()
@@ -96,7 +86,7 @@ func (e *eventsHandler) onPost(w http.ResponseWriter, r *http.Request) (int, int
 		return http.StatusBadRequest, "wrong time"
 	}
 
-	if err := SaveEvent(event); err == nil {
+	if err := e.DB.SaveEvent(event); err == nil {
 		eventsAdded.WithLabelValues("api-v1-event-post").Inc()
 		return http.StatusCreated, "ok"
 	}
@@ -109,21 +99,26 @@ func (e *eventsHandler) onGet(w http.ResponseWriter, r *http.Request) (int, inte
 	r.ParseForm()
 	vars := r.Form
 
-	var from, to time.Time
+	from := time.Unix(0, 0)
+	to := time.Now()
 
-	if fts, err := parseTime(vars.Get("from")); err == nil {
-		from = fts
-	} else {
-		from = time.Unix(0, 0)
+	if vfrom := vars.Get("from"); vfrom != "" {
+		if fts, err := parseTime(vfrom); err == nil {
+			from = fts
+		} else {
+			log.Errorf("wrong from date: %s", err.Error())
+		}
 	}
-	if tts, err := parseTime(vars.Get("to")); err == nil {
-		to = tts
-	} else {
-		to = time.Now()
+	if vto := vars.Get("to"); vto != "" {
+		if tts, err := parseTime(vto); err == nil {
+			to = tts
+		} else {
+			log.Errorf("wrong to date: %s", err.Error())
+		}
 	}
 	name := vars.Get("name")
 
-	events := GetEvents(from, to, name)
+	events := e.DB.GetEvents(from, to, name)
 	return http.StatusOK, events
 }
 
@@ -151,7 +146,7 @@ func (e *eventsHandler) onDelete(w http.ResponseWriter, r *http.Request) (int, i
 	name := vars.Get("name")
 
 	res := make(map[string]int)
-	deleted := DeleteEvents(from, to, name)
+	deleted := e.DB.DeleteEvents(from, to, name)
 	res["deleted"] = deleted
 	return http.StatusOK, res
 }
@@ -180,6 +175,7 @@ func (e eventsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 type humanEventsHandler struct {
 	Configuration *Configuration
+	DB            *DB
 }
 
 func (h humanEventsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -199,7 +195,7 @@ func (h humanEventsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	w.Write([]byte(fmt.Sprintf("Events for %s from %s to %s\n\n", name, from, to)))
 
-	for i, e := range GetEvents(from, to, name) {
+	for i, e := range h.DB.GetEvents(from, to, name) {
 		ts := time.Unix(0, e.Time)
 		w.Write([]byte(fmt.Sprintf("%d. %s   Name: %v\nTitle: %s\nText: %s\nTags: %s\n",
 			(i + 1), ts, e.Name, e.Title, e.Text, e.Tags)))

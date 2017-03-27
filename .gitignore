@@ -1,4 +1,5 @@
 eventdb
+eventdb-arm
 eventdb.boltdb
 .*
 *~

@@ -47,9 +47,12 @@ func main() {
 		log.Fatalf("Error parsing config file: %s", err)
 	}
 
-	DBOpen(c.DBFile)
+	db, err := DBOpen(c.DBFile)
+	if err != nil {
+		panic(err)
+	}
 
-	vw := vacuumWorker{Configuration: c}
+	vw := vacuumWorker{Configuration: c, DB: db}
 	vw.Start()
 
 	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
@@ -61,22 +64,22 @@ func main() {
 		w.Write([]byte("ok"))
 	})
 
-	apiHandler := eventsHandler{Configuration: c}
+	apiHandler := eventsHandler{Configuration: c, DB: db}
 	http.Handle("/api/v1/event", prometheus.InstrumentHandler("api-v1-event", apiHandler))
 
-	ah := AnnotationHandler{}
+	ah := AnnotationHandler{DB: db}
 	http.Handle("/annotations", prometheus.InstrumentHandler("annotations", ah))
 
-	pwh := PromWebHookHandler{}
+	pwh := PromWebHookHandler{DB: db}
 	http.Handle("/api/v1/promwebhook", prometheus.InstrumentHandler("api-v1-promwebhook", pwh))
 
-	hh := humanEventsHandler{Configuration: c}
+	hh := humanEventsHandler{Configuration: c, DB: db}
 	http.Handle("/last", hh)
 
 	http.Handle("/metrics", promhttp.Handler())
 
 	// database endpoints
-	http.Handle("/db/", http.StripPrefix("/db", NewDBInternalPagesHandler()))
+	http.Handle("/db/", http.StripPrefix("/db", db.NewDBInternalPagesHandler()))
 
 	// handle hup for reloading configuration
 	hup := make(chan os.Signal)
@@ -105,6 +108,7 @@ func main() {
 
 type vacuumWorker struct {
 	Configuration *Configuration
+	DB            *DB
 }
 
 func (v *vacuumWorker) Start() {
@@ -134,7 +138,7 @@ func (v *vacuumWorker) Start() {
 				if err == nil {
 					to := time.Now().Add(-retention)
 					from := time.Time{}
-					deleted := DeleteEvents(from, to, AnyBucket)
+					deleted := v.DB.DeleteEvents(from, to, AnyBucket)
 					log.Infof("vacuum deleted %d to %s", deleted, to)
 					deletedCntr.Add(float64(deleted))
 					lastRun.SetToCurrentTime()
