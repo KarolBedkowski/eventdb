@@ -5,12 +5,13 @@ package main
 
 import (
 	"bytes"
-	"crypto/md5"
+	//"crypto/md5"
 	"encoding/binary"
 	"encoding/gob"
 	"fmt"
 	"github.com/boltdb/bolt"
 	"github.com/prometheus/common/log"
+	"hash/adler32"
 	"strings"
 	"time"
 )
@@ -79,9 +80,18 @@ func encodeEventTS(ts int64, data []byte) ([]byte, error) {
 	if data == nil {
 		//		key.Write([]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0})
 	} else {
-		h := md5.New()
-		h.Write(data)
-		key.Write(h.Sum(nil))
+		/*
+			h := md5.New()
+			h.Write(data)
+			key.Write(h.Sum(nil))
+		*/
+		hash := adler32.Checksum(data)
+		key.Write([]byte{
+			byte((hash >> 3) & 0xff),
+			byte((hash >> 2) & 0xff),
+			byte((hash >> 1) & 0xff),
+			byte(hash & 0xff),
+		})
 	}
 	return key.Bytes(), nil
 }
