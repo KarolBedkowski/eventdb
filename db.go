@@ -104,6 +104,8 @@ func (db *DB) statsHandler(w http.ResponseWriter, req *http.Request) {
 }
 
 type metricsCollector struct {
+	instance *p.Desc
+
 	freePageN     *p.Desc
 	pendigPageN   *p.Desc
 	freeAlloc     *p.Desc
@@ -145,6 +147,8 @@ func newMetricsCollector() *metricsCollector {
 	bucketLabels := []string{"bucket"}
 
 	return &metricsCollector{
+		instance: p.NewDesc("boltdb_instance", "boltdb instance info", []string{"path"}, nil),
+
 		freePageN:     p.NewDesc("boltdb_freePageN", "boltdb total number of free pages on the freelist", nil, nil),
 		pendigPageN:   p.NewDesc("boltdb_pendigPageN", "boltdb total number of pending pages on the freelist", nil, nil),
 		freeAlloc:     p.NewDesc("boltdb_freeAlloc", "boltdb total bytes allocated in free pages", nil, nil),
@@ -182,6 +186,8 @@ func newMetricsCollector() *metricsCollector {
 }
 
 func (m *metricsCollector) Describe(ch chan<- *p.Desc) {
+	ch <- m.instance
+
 	ch <- m.freePageN
 	ch <- m.pendigPageN
 	ch <- m.freeAlloc
@@ -221,6 +227,8 @@ func (m *metricsCollector) Collect(ch chan<- p.Metric) {
 	if m.db == nil {
 		return
 	}
+	ch <- p.MustNewConstMetric(m.instance, p.GaugeValue, float64(1), m.db.Path())
+
 	stats := m.db.Stats()
 	ch <- p.MustNewConstMetric(m.freePageN, p.CounterValue, float64(stats.FreePageN))
 	ch <- p.MustNewConstMetric(m.pendigPageN, p.CounterValue, float64(stats.PendingPageN))
