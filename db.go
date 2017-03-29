@@ -20,14 +20,10 @@ type (
 		db         *bolt.DB
 		stats      bolt.Stats
 		statsDiff  bolt.Stats
+
+		metrics *boltMetrics
 	}
 )
-
-var boltMetricCollector = newMetricsCollector()
-
-func init() {
-	p.MustRegister(boltMetricCollector)
-}
 
 func DBOpen(filename string) (db *DB, err error) {
 	log.Debugf("globals.openDatabases START %s", filename)
@@ -45,7 +41,8 @@ func DBOpen(filename string) (db *DB, err error) {
 	}
 
 	db.db = bdb
-	boltMetricCollector.db = bdb
+	db.metrics = newBoltMetrics(bdb)
+	p.MustRegister(db.metrics)
 
 	err = bdb.Update(func(tx *bolt.Tx) error {
 		var err error
@@ -65,15 +62,16 @@ func DBOpen(filename string) (db *DB, err error) {
 func (db *DB) Close() error {
 	log.Info("DB.Close")
 	if db.db != nil {
+		p.Unregister(db.metrics)
+		db.metrics = nil
 		db.db.Close()
 		db.db = nil
 	}
 	log.Info("DB.Close DONE")
-	boltMetricCollector.db = nil
 	return nil
 }
 
-func (db *DB) NewDBInternalPagesHandler() http.Handler {
+func (db *DB) NewInternalsHandler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/backup", db.backupHandler)
 	mux.HandleFunc("/stats", db.statsHandler)
@@ -103,7 +101,7 @@ func (db *DB) statsHandler(w http.ResponseWriter, req *http.Request) {
 	json.NewEncoder(w).Encode(db.statsDiff)
 }
 
-type metricsCollector struct {
+type boltMetrics struct {
 	instance *p.Desc
 
 	freePageN     *p.Desc
@@ -143,10 +141,10 @@ type metricsCollector struct {
 	db *bolt.DB
 }
 
-func newMetricsCollector() *metricsCollector {
+func newBoltMetrics(db *bolt.DB) *boltMetrics {
 	bucketLabels := []string{"bucket"}
 
-	return &metricsCollector{
+	return &boltMetrics{
 		instance: p.NewDesc("boltdb_instance", "boltdb instance info", []string{"path"}, nil),
 
 		freePageN:     p.NewDesc("boltdb_freePageN", "boltdb total number of free pages on the freelist", nil, nil),
@@ -182,10 +180,12 @@ func newMetricsCollector() *metricsCollector {
 		bucketInlineBucketN:     p.NewDesc("boltdb_bucket_InlineBucketN", "total number on inlined buckets", bucketLabels, nil),
 		bucketInlineBucketInuse: p.NewDesc("boltdb_bucket_InlineBucketInuse", "bytes used for inlined buckets (also accounted for in LeafInuse)", bucketLabels, nil),
 		bucketSequence:          p.NewDesc("boltdb_bucket_sequence", "current integer for the bucket", bucketLabels, nil),
+
+		db: db,
 	}
 }
 
-func (m *metricsCollector) Describe(ch chan<- *p.Desc) {
+func (m *boltMetrics) Describe(ch chan<- *p.Desc) {
 	ch <- m.instance
 
 	ch <- m.freePageN
@@ -223,7 +223,7 @@ func (m *metricsCollector) Describe(ch chan<- *p.Desc) {
 	ch <- m.bucketSequence
 }
 
-func (m *metricsCollector) Collect(ch chan<- p.Metric) {
+func (m *boltMetrics) Collect(ch chan<- p.Metric) {
 	if m.db == nil {
 		return
 	}
