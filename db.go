@@ -10,6 +10,7 @@ import (
 	p "github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/log"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 )
@@ -103,6 +104,7 @@ func (db *DB) statsHandler(w http.ResponseWriter, req *http.Request) {
 
 type boltMetrics struct {
 	instance *p.Desc
+	fileSize *p.Desc
 
 	freePageN     *p.Desc
 	pendigPageN   *p.Desc
@@ -146,6 +148,7 @@ func newBoltMetrics(db *bolt.DB) *boltMetrics {
 
 	return &boltMetrics{
 		instance: p.NewDesc("boltdb_instance", "boltdb instance info", []string{"path"}, nil),
+		fileSize: p.NewDesc("boltdb_db_file_size", "boltdb database file size", nil, nil),
 
 		freePageN:     p.NewDesc("boltdb_freePageN", "boltdb total number of free pages on the freelist", nil, nil),
 		pendigPageN:   p.NewDesc("boltdb_pendigPageN", "boltdb total number of pending pages on the freelist", nil, nil),
@@ -187,6 +190,7 @@ func newBoltMetrics(db *bolt.DB) *boltMetrics {
 
 func (m *boltMetrics) Describe(ch chan<- *p.Desc) {
 	ch <- m.instance
+	ch <- m.fileSize
 
 	ch <- m.freePageN
 	ch <- m.pendigPageN
@@ -228,6 +232,10 @@ func (m *boltMetrics) Collect(ch chan<- p.Metric) {
 		return
 	}
 	ch <- p.MustNewConstMetric(m.instance, p.GaugeValue, float64(1), m.db.Path())
+
+	if stat, err := os.Lstat(m.db.Path()); err == nil {
+		ch <- p.MustNewConstMetric(m.fileSize, p.GaugeValue, float64(stat.Size()))
+	}
 
 	stats := m.db.Stats()
 	ch <- p.MustNewConstMetric(m.freePageN, p.CounterValue, float64(stats.FreePageN))
