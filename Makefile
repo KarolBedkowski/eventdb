@@ -33,4 +33,7 @@ run:
 	#go run -v *.go -log.level debug
 	go-reload *.go -log.level debug
 
+clean:
+	rm -f eventdb eventdb-arm
+
 # vim:ft=make

@@ -42,7 +42,7 @@ func main() {
 	log.Infoln("Starting eventdb", version.Info())
 	log.Infoln("Build context", version.BuildContext())
 
-	c, err := loadConfiguration(*configFile)
+	c, err := LoadConfiguration(*configFile)
 	if err != nil {
 		log.Fatalf("Error parsing config file: %s", err)
 	}
@@ -90,7 +90,7 @@ func main() {
 		for {
 			select {
 			case <-hup:
-				if newConf, err := loadConfiguration(*configFile); err == nil {
+				if newConf, err := LoadConfiguration(*configFile); err == nil {
 					log.Debugf("new configuration: %+v", newConf)
 					apiHandler.Configuration = newConf
 					vw.Configuration = newConf
