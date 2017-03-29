@@ -5,7 +5,6 @@ package main
 
 import (
 	"bytes"
-	//"crypto/md5"
 	"encoding/binary"
 	"encoding/gob"
 	"fmt"
@@ -38,19 +37,7 @@ func init() {
 }
 
 func decodeEvent(e []byte) (*Event, error) {
-	/*
-		b := bytes.NewReader(e)
-		var r io.Reader
-		if zr, err := zlib.NewReader(b); err == nil {
-			defer zr.Close()
-			r = zr
-		} else {
-			r = bytes.NewBuffer(e)
-		}
-	*/
-
 	r := bytes.NewBuffer(e)
-
 	ev := &Event{}
 	dec := gob.NewDecoder(r)
 	if err := dec.Decode(ev); err != nil {
@@ -77,14 +64,7 @@ func encodeEventTS(ts int64, data []byte) ([]byte, error) {
 		log.Errorf("event encode error: %s", err)
 		return nil, err
 	}
-	if data == nil {
-		//		key.Write([]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0})
-	} else {
-		/*
-			h := md5.New()
-			h.Write(data)
-			key.Write(h.Sum(nil))
-		*/
+	if data != nil {
 		hash := adler32.Checksum(data)
 		key.Write([]byte{
 			byte((hash >> 3) & 0xff),
@@ -107,19 +87,6 @@ func (e *Event) encode() ([]byte, []byte, error) {
 
 	key, err := encodeEventTS(e.Time, r.Bytes())
 	e.key = key
-
-	/*
-		// compress content
-		var b bytes.Buffer
-		w, _ := zlib.NewWriterLevel(&b, zlib.BestCompression)
-		w.Write(r.Bytes())
-		w.Close()
-
-		log.Debugf("encode %d -> %d", r.Len(), b.Len())
-
-
-		return b.Bytes(), key, err
-	*/
 	return r.Bytes(), key, err
 }
 
@@ -155,15 +122,17 @@ func (db *DB) SaveEvent(e *Event) error {
 		if e.Name != "" {
 			name = []byte(e.Name)
 		}
+
 		b, err := tx.CreateBucketIfNotExists(name)
 		if err != nil {
 			return err
 		}
+
 		b.FillPercent = 0.99
-		data, key, err := e.encode()
-		if err == nil {
+		if data, key, err := e.encode(); err == nil {
 			return b.Put(key, data)
 		}
+
 		return err
 	})
 }
@@ -247,7 +216,6 @@ func (db *DB) DeleteEvents(from, to time.Time, name string) int {
 	deleted := 0
 
 	err := db.db.Update(func(tx *bolt.Tx) error {
-
 		if name == AnyBucket {
 			tx.ForEach(func(name []byte, b *bolt.Bucket) error {
 				keys := getEventsKeyFromBucket(f, t, b)

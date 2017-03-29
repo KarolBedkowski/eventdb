@@ -14,32 +14,26 @@ import (
 	"time"
 )
 
+func intToTime(ts int64) time.Time {
+	if ts > 1000000000000000000 { // nanos
+		return time.Unix(0, ts)
+	} else if ts > 1000000000000000 { // micros
+		return time.Unix(0, ts*1000)
+	} else if ts > 1000000000000 { // milils
+		return time.Unix(0, ts*1000000)
+	}
+	return time.Unix(ts, 0)
+}
+
 func parseTime(t string) (time.Time, error) {
 	if t == "" {
 		return time.Time{}, fmt.Errorf("empty time")
 	}
 	if ts, err := strconv.ParseFloat(t, 64); err == nil {
-		if ts > 1000000000000000000 { // nanos
-			fmt.Printf("try float nanos %v", ts)
-			return time.Unix(0, int64(ts)), nil
-		} else if ts > 1000000000000000 { // micros
-			fmt.Printf("try float micros %v", ts)
-			return time.Unix(0, int64(ts*1000)), nil
-		} else if ts > 1000000000000 { // milils
-			fmt.Printf("try float millis %v", ts)
-			return time.Unix(0, int64(ts*1000000)), nil
-		}
-		return time.Unix(int64(ts), 0), nil
+		return intToTime(int64(ts)), nil
 	}
 	if ts, err := strconv.ParseInt(t, 10, 64); err == nil {
-		if ts > 1000000000000000000 { // nanos
-			return time.Unix(0, ts), nil
-		} else if ts > 1000000000000000 { // micros
-			return time.Unix(0, ts*1000), nil
-		} else if ts > 1000000000000 { // milils
-			return time.Unix(0, ts*1000000), nil
-		}
-		return time.Unix(ts, 0), nil
+		return intToTime(ts), nil
 	}
 	if ts, err := time.Parse(time.RFC3339Nano, t); err == nil {
 		return ts, nil

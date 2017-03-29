@@ -52,6 +52,8 @@ func main() {
 		panic(err)
 	}
 
+	defer db.Close()
+
 	vw := vacuumWorker{Configuration: c, DB: db}
 	vw.Start()
 
@@ -79,7 +81,7 @@ func main() {
 	http.Handle("/metrics", promhttp.Handler())
 
 	// database endpoints
-	http.Handle("/db/", http.StripPrefix("/db", db.NewDBInternalPagesHandler()))
+	http.Handle("/db/", http.StripPrefix("/db", db.NewInternalsHandler()))
 
 	// handle hup for reloading configuration
 	hup := make(chan os.Signal)
@@ -112,7 +114,6 @@ type vacuumWorker struct {
 }
 
 func (v *vacuumWorker) Start() {
-
 	deletedCntr := prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Name: "eventdb_vacuum_events_deleted_total",
