@@ -5,6 +5,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/boltdb/bolt"
 	"github.com/boltdb/boltd"
 	p "github.com/prometheus/client_golang/prometheus"
@@ -26,38 +27,34 @@ type (
 	}
 )
 
-func DBOpen(filename string) (db *DB, err error) {
+func DBOpen(filename string) (*DB, error) {
 	log.Debugf("globals.openDatabases START %s", filename)
 
-	db = &DB{
-		dbFilename: filename,
-	}
-
-	bdb, err := bolt.Open(filename, 0600,
-		&bolt.Options{Timeout: 10 * time.Second})
-
+	bdb, err := bolt.Open(filename, 0600, &bolt.Options{Timeout: 10 * time.Second})
 	if err != nil {
-		log.Errorf("DB.open db error: %v", err)
-		panic("DB.open  db error " + err.Error())
+		return nil, err
 	}
-
-	db.db = bdb
-	db.metrics = newBoltMetrics(bdb)
-	p.MustRegister(db.metrics)
 
 	err = bdb.Update(func(tx *bolt.Tx) error {
-		var err error
-		_, err = tx.CreateBucketIfNotExists(defaultBucket)
-		if err != nil {
-			panic("DB.open create bucket error" + err.Error())
+		if _, err := tx.CreateBucketIfNotExists(defaultBucket); err != nil {
+			return fmt.Errorf("db create bucket error: %s", err.Error())
 		}
-		return err
+		return nil
 	})
+	if err != nil {
+		bdb.Close()
+		return nil, err
+	}
 
-	db.stats = db.db.Stats()
+	db := &DB{
+		dbFilename: filename,
+		db:         bdb,
+		metrics:    newBoltMetrics(bdb),
+		stats:      bdb.Stats(),
+	}
+	p.MustRegister(db.metrics)
 
-	log.Debug("DB.openDatabases DONE")
-	return
+	return db, nil
 }
 
 func (db *DB) Close() error {

@@ -27,7 +27,7 @@ func intToTime(ts int64) time.Time {
 
 func parseTime(t string) (time.Time, error) {
 	if t == "" {
-		return time.Time{}, fmt.Errorf("empty time")
+		return time.Time{}, fmt.Errorf("missing value")
 	}
 	if ts, err := strconv.ParseFloat(t, 64); err == nil {
 		return intToTime(int64(ts)), nil

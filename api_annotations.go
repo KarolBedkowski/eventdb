@@ -54,12 +54,22 @@ func (a *AnnotationHandler) onPost(w http.ResponseWriter, r *http.Request) (int,
 
 	log.Debugf("annotation post %v %+v", r.URL, ar)
 
-	from, _ := parseTime(ar.Range.From)
-	to, _ := parseTime(ar.Range.To)
+	from, err := parseTime(ar.Range.From)
+	if err != nil {
+		return http.StatusBadRequest, "wrong from date: " + err.Error()
+	}
+	to, err := parseTime(ar.Range.To)
+	if err != nil {
+		return http.StatusBadRequest, "wrong to date: " + err.Error()
+	}
 
 	name, tags := parseName(ar.Annotation.Name)
 
-	events := a.DB.GetEvents(from, to, name)
+	events, err := a.DB.GetEvents(from, to, name)
+	if err != nil {
+		log.Errorf("get events (%v, %v, %v) error: %s", from, to, name, err.Error())
+		return http.StatusBadRequest, "error"
+	}
 
 	resp := make([]annotationResp, 0, len(events))
 	for _, e := range events {

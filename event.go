@@ -40,28 +40,20 @@ func decodeEvent(e []byte) (*Event, error) {
 	r := bytes.NewBuffer(e)
 	ev := &Event{}
 	dec := gob.NewDecoder(r)
-	if err := dec.Decode(ev); err != nil {
-		log.Warnf("decodeEvent decode error: %s", err)
-		return nil, err
-	}
-	return ev, nil
+	err := dec.Decode(ev)
+	return ev, err
 }
 
 func decodeEventTS(k []byte) (int64, error) {
 	var ts int64
 	buf := bytes.NewReader(k[:8])
 	err := binary.Read(buf, binary.BigEndian, &ts)
-	if err != nil {
-		log.Errorf("decodeEventTS failed: %s", err)
-		return 0, err
-	}
-	return ts, nil
+	return ts, err
 }
 
 func encodeEventTS(ts int64, data []byte) ([]byte, error) {
 	key := new(bytes.Buffer)
 	if err := binary.Write(key, binary.BigEndian, ts); err != nil {
-		log.Errorf("event encode error: %s", err)
 		return nil, err
 	}
 	if data != nil {
@@ -77,11 +69,10 @@ func encodeEventTS(ts int64, data []byte) ([]byte, error) {
 }
 
 func (e *Event) encode() ([]byte, []byte, error) {
-	// KEY: ts(int64)md5sum(16)
+	// KEY: ts(int64)crc(4) (12bytes)
 	r := new(bytes.Buffer)
 	enc := gob.NewEncoder(r)
 	if err := enc.Encode(e); err != nil {
-		log.Errorf("event encode error: %s", err)
 		return nil, nil, err
 	}
 
@@ -94,6 +85,7 @@ func (e *Event) CheckTags(tags []string) bool {
 	if tags == nil || len(tags) == 0 {
 		return true
 	}
+
 	if e.Tags == "" {
 		return false
 	}
@@ -129,7 +121,8 @@ func (db *DB) SaveEvent(e *Event) error {
 		}
 
 		b.FillPercent = 0.99
-		if data, key, err := e.encode(); err == nil {
+		data, key, err := e.encode()
+		if err == nil {
 			return b.Put(key, data)
 		}
 
@@ -138,37 +131,45 @@ func (db *DB) SaveEvent(e *Event) error {
 }
 
 func getEventsFromBucket(f, t int64, b *bolt.Bucket, bname []byte) []*Event {
-	events := make([]*Event, 0, 100)
+	fkey, err := encodeEventTS(f, nil)
+	if err != nil {
+		log.Errorf("encodeEventTS for %v error: %s", t, err)
+		fkey = []byte{0}
+	}
+
 	c := b.Cursor()
-	fkey, _ := encodeEventTS(f, nil)
+	var events []*Event
 
 	for k, v := c.Seek(fkey); k != nil; k, v = c.Next() {
-		if ts, err := decodeEventTS(k); err != nil || ts < f || ts > t {
-			log.Debugf("e ts: %v", ts)
+		if ts, err := decodeEventTS(k); err != nil {
+			log.Debugf("decode event ts error: %s", err.Error())
+		} else if ts < f || ts > t {
 			continue
 		}
 		if e, err := decodeEvent(v); err == nil {
 			e.key = k
 			e.bucket = bname
 			events = append(events, e)
+		} else {
+			log.Debugf("decode event error: %s", err.Error())
 		}
 	}
 
 	return events
 }
 
-func (db *DB) GetEvents(from, to time.Time, name string) []*Event {
+func (db *DB) GetEvents(from, to time.Time, name string) ([]*Event, error) {
 	log.Debugf("GetEvents %s - %s [%s]", from, to, name)
 
 	f := from.UnixNano()
 	t := to.UnixNano()
 	if t < f {
-		return nil
+		return nil, fmt.Errorf("wrong time range (from > to)")
 	}
 
-	events := make([]*Event, 0, 0)
+	var events []*Event
 
-	db.db.View(func(tx *bolt.Tx) error {
+	err := db.db.View(func(tx *bolt.Tx) error {
 		if name == AnyBucket {
 			return tx.ForEach(func(name []byte, b *bolt.Bucket) error {
 				es := getEventsFromBucket(f, t, b, name)
@@ -182,24 +183,33 @@ func (db *DB) GetEvents(from, to time.Time, name string) []*Event {
 			bname = []byte(name)
 		}
 
-		b := tx.Bucket(bname)
-		if b == nil {
+		if b := tx.Bucket(bname); b == nil {
 			return fmt.Errorf("unknown bucket name: %v", name)
+		} else {
+			events = getEventsFromBucket(f, t, b, bname)
 		}
-		events = getEventsFromBucket(f, t, b, bname)
+
 		return nil
 	})
 
-	return events
+	return events, err
 }
 
 func getEventsKeyFromBucket(f, t int64, b *bolt.Bucket) [][]byte {
-	keys := make([][]byte, 0, 100)
+	fkey, err := encodeEventTS(f, nil)
+	if err != nil {
+		log.Errorf("encodeEventTS for %v error: %s", t, err)
+		fkey = []byte{0}
+	}
+
 	c := b.Cursor()
-	fkey, _ := encodeEventTS(f, nil)
+	var keys [][]byte
 
 	for k, _ := c.Seek(fkey); k != nil; k, _ = c.Next() {
-		if ts, err := decodeEventTS(k); err != nil || ts < f || ts > t {
+		if ts, err := decodeEventTS(k); err != nil {
+			log.Debug("decode event error: %v", err)
+			continue
+		} else if ts < f || ts > t {
 			continue
 		}
 
@@ -209,7 +219,7 @@ func getEventsKeyFromBucket(f, t int64, b *bolt.Bucket) [][]byte {
 	return keys
 }
 
-func (db *DB) DeleteEvents(from, to time.Time, name string) int {
+func (db *DB) DeleteEvents(from, to time.Time, name string) (int, error) {
 	f := from.UnixNano()
 	t := to.UnixNano()
 
@@ -217,9 +227,8 @@ func (db *DB) DeleteEvents(from, to time.Time, name string) int {
 
 	err := db.db.Update(func(tx *bolt.Tx) error {
 		if name == AnyBucket {
-			tx.ForEach(func(name []byte, b *bolt.Bucket) error {
+			return tx.ForEach(func(name []byte, b *bolt.Bucket) error {
 				keys := getEventsKeyFromBucket(f, t, b)
-				deleted += len(keys)
 
 				for _, k := range keys {
 					if err := b.Delete(k); err != nil {
@@ -227,33 +236,30 @@ func (db *DB) DeleteEvents(from, to time.Time, name string) int {
 					}
 				}
 
+				deleted += len(keys)
 				return nil
 			})
+		}
+
+		bname := defaultBucket
+		if name != "" {
+			bname = []byte(name)
+		}
+
+		if b := tx.Bucket(bname); b == nil {
+			return fmt.Errorf("unknown bucket name: %v", name)
 		} else {
-			bname := defaultBucket
-			if name != "" {
-				bname = []byte(name)
-			}
-			b := tx.Bucket(bname)
-			if b == nil {
-				return fmt.Errorf("unknown bucket name: %v", name)
-			}
 			keys := getEventsKeyFromBucket(f, t, b)
-			deleted += len(keys)
 			for _, k := range keys {
 				if err := b.Delete(k); err != nil {
 					return err
 				}
 			}
+			deleted += len(keys)
 		}
 
 		return nil
 	})
 
-	if err != nil {
-		log.Errorf("event delete error: %s", err.Error())
-		return 0
-	}
-
-	return deleted
+	return deleted, err
 }

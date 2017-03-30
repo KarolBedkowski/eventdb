@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	_ "net/http/pprof"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -77,7 +76,8 @@ func (e *eventsHandler) onPost(w http.ResponseWriter, r *http.Request) (int, int
 		if t, err := time.Parse(time.RFC3339Nano, ev.Time.(string)); err == nil {
 			event.Time = t.UnixNano()
 		} else {
-			log.Errorf("Parsing %+v error %s", ev.Time, err)
+			log.Errorf("Parsing time %+v error %s", ev.Time, err)
+			return http.StatusBadRequest, "wrong time"
 		}
 	}
 
@@ -89,24 +89,39 @@ func (e *eventsHandler) onPost(w http.ResponseWriter, r *http.Request) (int, int
 	if err := e.DB.SaveEvent(event); err == nil {
 		eventsAdded.WithLabelValues("api-v1-event-post").Inc()
 		return http.StatusCreated, "ok"
+	} else {
+		log.Errorf("save event error: %s", err.Error())
 	}
 
 	eventAddError.Inc()
 	return http.StatusInternalServerError, "error"
 }
 
+type eventsOnGetRespHeader struct {
+	From time.Time
+	To   time.Time
+	Name string
+	Tags []string
+}
+
+type eventsOnGetResp struct {
+	Header *eventsOnGetRespHeader
+	Events []*Event
+}
+
 func (e *eventsHandler) onGet(w http.ResponseWriter, r *http.Request) (int, interface{}) {
 	r.ParseForm()
 	vars := r.Form
 
-	from := time.Unix(0, 0)
 	to := time.Now()
+	from := to.AddDate(0, 0, -1)
 
 	if vfrom := vars.Get("from"); vfrom != "" {
 		if fts, err := parseTime(vfrom); err == nil {
 			from = fts
 		} else {
 			log.Errorf("wrong from date: %s", err.Error())
+			return http.StatusBadRequest, "wrong from date"
 		}
 	}
 	if vto := vars.Get("to"); vto != "" {
@@ -114,23 +129,35 @@ func (e *eventsHandler) onGet(w http.ResponseWriter, r *http.Request) (int, inte
 			to = tts
 		} else {
 			log.Errorf("wrong to date: %s", err.Error())
+			return http.StatusBadRequest, "wrong to date"
 		}
 	}
 
 	name, tags := parseName(vars.Get("name"))
 
-	events := e.DB.GetEvents(from, to, name)
+	events, _ := e.DB.GetEvents(from, to, name)
 	if tags == nil || len(tags) == 0 {
 		return http.StatusOK, events
 	}
 
-	resp := make([]*Event, 0, len(events))
+	filteredEvents := make([]*Event, 0, len(events))
 	for _, e := range events {
 		if e.CheckTags(tags) {
-			resp = append(resp, e)
+			filteredEvents = append(filteredEvents, e)
 		}
 	}
-	return http.StatusOK, resp
+
+	response := &eventsOnGetResp{
+		Header: &eventsOnGetRespHeader{
+			From: from,
+			To:   to,
+			Name: name,
+			Tags: tags,
+		},
+		Events: filteredEvents,
+	}
+
+	return http.StatusOK, response
 }
 
 func (e *eventsHandler) onDelete(w http.ResponseWriter, r *http.Request) (int, interface{}) {
@@ -155,10 +182,15 @@ func (e *eventsHandler) onDelete(w http.ResponseWriter, r *http.Request) (int, i
 	}
 
 	name := vars.Get("name")
-
-	res := make(map[string]int)
-	deleted := e.DB.DeleteEvents(from, to, name)
-	res["deleted"] = deleted
+	res := &struct {
+		Deleted int
+	}{}
+	if deleted, err := e.DB.DeleteEvents(from, to, name); err == nil {
+		res.Deleted = deleted
+	} else {
+		log.Errorf("delete error: %s", err.Error())
+		return http.StatusInternalServerError, "delete error"
+	}
 	return http.StatusOK, res
 }
 
@@ -201,12 +233,18 @@ func (h humanEventsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		name = "_any_"
 	}
 
-	w.Header().Set("Content-Type", "text/plain; charset=UTF-8")
-	w.WriteHeader(http.StatusOK)
+	events, err := h.DB.GetEvents(from, to, name)
+	if err != nil {
+		log.Errorf("get events error: %s", err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "text/plain; charset=UTF-8")
 	w.Write([]byte(fmt.Sprintf("Events for %s from %s to %s\n\n", name, from, to)))
 
-	for i, e := range h.DB.GetEvents(from, to, name) {
+	for i, e := range events {
 		if !e.CheckTags(tags) {
 			continue
 		}

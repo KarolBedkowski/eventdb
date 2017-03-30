@@ -139,9 +139,12 @@ func (v *vacuumWorker) Start() {
 				if err == nil {
 					to := time.Now().Add(-retention)
 					from := time.Time{}
-					deleted := v.DB.DeleteEvents(from, to, AnyBucket)
-					log.Infof("vacuum deleted %d to %s", deleted, to)
-					deletedCntr.Add(float64(deleted))
+					if deleted, err := v.DB.DeleteEvents(from, to, AnyBucket); err == nil {
+						log.Infof("vacuum deleted %d to %s", deleted, to)
+						deletedCntr.Add(float64(deleted))
+					} else {
+						log.Errorf("vacuum delete error: %s", err.Error())
+					}
 					lastRun.SetToCurrentTime()
 				} else {
 					log.Errorf("vacuumWorker parse duration error: %s", err.Error())
