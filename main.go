@@ -72,7 +72,7 @@ func main() {
 	ah := AnnotationHandler{DB: db}
 	http.Handle("/annotations", prometheus.InstrumentHandler("annotations", ah))
 
-	pwh := PromWebHookHandler{DB: db}
+	pwh := PromWebHookHandler{Configuration: c, DB: db}
 	http.Handle("/api/v1/promwebhook", prometheus.InstrumentHandler("api-v1-promwebhook", pwh))
 
 	hh := humanEventsHandler{Configuration: c, DB: db}
@@ -95,6 +95,7 @@ func main() {
 					apiHandler.Configuration = newConf
 					vw.Configuration = newConf
 					hh.Configuration = newConf
+					pwh.Configuration = newConf
 					log.Info("configuration reloaded")
 				} else {
 					log.Errorf("reloading configuration err: %s", err)
@@ -134,23 +135,18 @@ func (v *vacuumWorker) Start() {
 	go func() {
 		time.Sleep(1 * time.Minute)
 		for {
-			if v.Configuration.Retention != "" {
-				retention, err := time.ParseDuration(v.Configuration.Retention)
-				if err == nil {
-					to := time.Now().Add(-retention)
-					from := time.Time{}
-					if deleted, err := v.DB.DeleteEvents(from, to, AnyBucket); err == nil {
-						log.Infof("vacuum deleted %d to %s", deleted, to)
-						deletedCntr.Add(float64(deleted))
-					} else {
-						log.Errorf("vacuum delete error: %s", err.Error())
-					}
-					lastRun.SetToCurrentTime()
+			if v.Configuration.RetentionParsed != nil {
+				to := time.Now().Add(-(*v.Configuration.RetentionParsed))
+				from := time.Time{}
+				if deleted, err := v.DB.DeleteEvents(from, to, AnyBucket); err == nil {
+					log.Infof("vacuum deleted %d to %s", deleted, to)
+					deletedCntr.Add(float64(deleted))
 				} else {
-					log.Errorf("vacuumWorker parse duration error: %s", err.Error())
+					log.Errorf("vacuum delete error: %s", err.Error())
 				}
-				time.Sleep(3 * time.Hour)
+				lastRun.SetToCurrentTime()
 			}
+			time.Sleep(3 * time.Hour)
 		}
 	}()
 }

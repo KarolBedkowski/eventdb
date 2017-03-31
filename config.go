@@ -7,8 +7,10 @@
 package main
 
 import (
+	"fmt"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
+	"time"
 )
 
 type (
@@ -17,6 +19,8 @@ type (
 		DBFile    string `yaml:"dbfile"`
 		Retention string `yaml:"retention"`
 		Debug     bool   `yaml:"debug"`
+
+		RetentionParsed *time.Duration `yaml:"-"`
 	}
 )
 
@@ -41,6 +45,14 @@ func LoadConfiguration(filename string) (*Configuration, error) {
 
 	if err = c.validate(); err != nil {
 		return nil, err
+	}
+
+	if c.Retention != "" {
+		r, err := time.ParseDuration(c.Retention)
+		if err != nil {
+			return nil, fmt.Errorf("parse retention time error: %s", err.Error())
+		}
+		c.RetentionParsed = &r
 	}
 
 	return c, nil

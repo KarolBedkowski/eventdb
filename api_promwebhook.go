@@ -46,7 +46,8 @@ type (
 	}
 
 	PromWebHookHandler struct {
-		DB *DB
+		Configuration *Configuration
+		DB            *DB
 	}
 )
 
@@ -70,11 +71,21 @@ func (p *PromWebHookHandler) onPost(w http.ResponseWriter, r *http.Request) (int
 	}
 
 	log.Debugf("new req from prom: %+v", m)
+	minDate := time.Unix(0, 0)
+	if p.Configuration.RetentionParsed != nil {
+		minDate = time.Now().Add(-(*p.Configuration.RetentionParsed))
+	}
 
 	for _, a := range m.Alerts {
+		if minDate.After(a.StartsAt) {
+			log.Debugf("date %s before retention time - skipping", a.StartsAt)
+			continue
+		}
+
 		e := &Event{
 			Time: a.StartsAt.UnixNano(),
 		}
+
 		if v, ok := a.Annotations["summary"]; ok {
 			e.Title = fmt.Sprintf("[%s] %s", a.Status, strings.TrimSpace(v))
 		} else {

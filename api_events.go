@@ -86,6 +86,14 @@ func (e *eventsHandler) onPost(w http.ResponseWriter, r *http.Request) (int, int
 		return http.StatusBadRequest, "wrong time"
 	}
 
+	if e.Configuration.RetentionParsed != nil {
+		minDate := time.Now().Add(-(*e.Configuration.RetentionParsed)).UnixNano()
+		if minDate > event.Time {
+			log.Debugf("date %s before retention time - skipping", ev.Time)
+			return http.StatusNotModified, "not inserted due retention time"
+		}
+	}
+
 	if err := e.DB.SaveEvent(event); err == nil {
 		eventsAdded.WithLabelValues("api-v1-event-post").Inc()
 		return http.StatusCreated, "ok"
