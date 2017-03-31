@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Merovius/systemd"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/common/log"
@@ -38,6 +39,9 @@ func main() {
 		fmt.Fprintln(os.Stdout, version.Print("eventdb"))
 		os.Exit(0)
 	}
+
+	systemd.NotifyStatus("starting")
+	systemd.AutoWatchdog()
 
 	log.Infoln("Starting eventdb", version.Info())
 	log.Infoln("Build context", version.BuildContext())
@@ -90,6 +94,7 @@ func main() {
 		for {
 			select {
 			case <-hup:
+				systemd.NotifyStatus("reloading")
 				if newConf, err := LoadConfiguration(*configFile); err == nil {
 					log.Debugf("new configuration: %+v", newConf)
 					apiHandler.Configuration = newConf
@@ -105,8 +110,28 @@ func main() {
 		}
 	}()
 
-	log.Infof("Listening on %s", *listenAddress)
-	log.Fatal(http.ListenAndServe(*listenAddress, nil))
+	// cleanup
+	cleanChannel := make(chan os.Signal, 1)
+	signal.Notify(cleanChannel, os.Interrupt, syscall.SIGTERM, syscall.SIGKILL)
+	go func() {
+		<-cleanChannel
+		log.Info("Closing...")
+		systemd.Notify("STOPPING=1\r\nSTATUS=stopping")
+		db.Close()
+		systemd.NotifyStatus("stopped")
+		os.Exit(0)
+	}()
+
+	go func() {
+		log.Infof("Listening on %s", *listenAddress)
+		log.Fatal(http.ListenAndServe(*listenAddress, nil))
+	}()
+
+	systemd.NotifyReady()
+	systemd.NotifyStatus("running")
+
+	done := make(chan bool)
+	<-done
 }
 
 type vacuumWorker struct {
