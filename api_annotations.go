@@ -45,21 +45,25 @@ type (
 	}
 )
 
-func (a *AnnotationHandler) onPost(w http.ResponseWriter, r *http.Request) (int, interface{}) {
+func (a *AnnotationHandler) onPost(w http.ResponseWriter, r *http.Request, l log.Logger) (int, interface{}) {
+	l = l.With("action", "AnnotationHandler.onPost")
+
 	ar := &annotationReq{}
 	if err := json.NewDecoder(r.Body).Decode(ar); err != nil {
-		log.Errorf("unmarshal error: %s", err)
+		l.Errorf("unmarshal error: %s", err)
 		return 442, "bad request"
 	}
 
-	log.Debugf("annotation post %v %+v", r.URL, ar)
+	l.Debugf("annotation post %+v", ar)
 
 	from, err := parseTime(ar.Range.From)
 	if err != nil {
+		l.Debugf("wrong from date: %s", err.Error())
 		return http.StatusBadRequest, "wrong from date: " + err.Error()
 	}
 	to, err := parseTime(ar.Range.To)
 	if err != nil {
+		l.Debugf("wrong to date: %s", err.Error())
 		return http.StatusBadRequest, "wrong to date: " + err.Error()
 	}
 
@@ -67,7 +71,7 @@ func (a *AnnotationHandler) onPost(w http.ResponseWriter, r *http.Request) (int,
 
 	events, err := a.DB.GetEvents(from, to, name)
 	if err != nil {
-		log.Errorf("get events (%v, %v, %v) error: %s", from, to, name, err.Error())
+		l.Errorf("get events (%v, %v, %v) error: %s", from, to, name, err.Error())
 		return http.StatusBadRequest, "error"
 	}
 
@@ -88,19 +92,21 @@ func (a *AnnotationHandler) onPost(w http.ResponseWriter, r *http.Request) (int,
 	return http.StatusOK, resp
 }
 
-func (a *AnnotationHandler) onOptions(w http.ResponseWriter, r *http.Request) (int, interface{}) {
+func (a *AnnotationHandler) onOptions(w http.ResponseWriter, r *http.Request, l log.Logger) (int, interface{}) {
 	return http.StatusOK, ""
 }
 
 func (a AnnotationHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	l := log.With("remote", r.RemoteAddr).With("req", r.RequestURI)
+
 	code := http.StatusNotFound
 	var data interface{}
 
 	switch r.Method {
 	case "POST":
-		code, data = a.onPost(w, r)
+		code, data = a.onPost(w, r, l)
 	case "OPTIONS":
-		code, data = a.onOptions(w, r)
+		code, data = a.onOptions(w, r, l)
 	}
 
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
@@ -111,7 +117,7 @@ func (a AnnotationHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if data != nil {
 		if err := json.NewEncoder(w).Encode(data); err != nil {
-			log.Errorf("encoding error: %s", err)
+			l.Errorf("encoding error: %s", err)
 		}
 	}
 }

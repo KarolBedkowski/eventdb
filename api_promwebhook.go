@@ -63,14 +63,17 @@ func (k KV) String() string {
 	return strings.Join(out, "\n")
 }
 
-func (p *PromWebHookHandler) onPost(w http.ResponseWriter, r *http.Request) (int, interface{}) {
+func (p *PromWebHookHandler) onPost(w http.ResponseWriter, r *http.Request, l log.Logger) (int, interface{}) {
+	l = l.With("action", "PromWebHookHandler.onPost")
+
 	m := &WebhookMessage{}
 	if err := json.NewDecoder(r.Body).Decode(m); err != nil {
-		log.Errorf("unmarshal error: %s", err)
+		l.Debugf("decode body error: %s; %+v", err, r.Body)
 		return 442, "bad request"
 	}
 
-	log.Debugf("new req from prom: %+v", m)
+	l.Debugf("new req from prom: %+v", m)
+
 	minDate := time.Unix(0, 0)
 	if p.Configuration.RetentionParsed != nil {
 		minDate = time.Now().Add(-(*p.Configuration.RetentionParsed))
@@ -78,7 +81,7 @@ func (p *PromWebHookHandler) onPost(w http.ResponseWriter, r *http.Request) (int
 
 	for _, a := range m.Alerts {
 		if minDate.After(a.StartsAt) {
-			log.Debugf("date %s before retention time - skipping", a.StartsAt)
+			l.Debugf("date %s before retention time - skipping", a.StartsAt)
 			continue
 		}
 
@@ -105,7 +108,7 @@ func (p *PromWebHookHandler) onPost(w http.ResponseWriter, r *http.Request) (int
 			e.Name = strings.TrimSpace(v)
 		}
 		if err := p.DB.SaveEvent(e); err != nil {
-			log.Errorf("save event error: %s", err)
+			l.Errorf("save event error: %s", err)
 			eventAddError.Inc()
 		} else {
 			eventsAdded.WithLabelValues("api-v1-promwebhook-post").Inc()
@@ -116,19 +119,20 @@ func (p *PromWebHookHandler) onPost(w http.ResponseWriter, r *http.Request) (int
 }
 
 func (p PromWebHookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	l := log.With("remote", r.RemoteAddr).With("req", r.RequestURI)
 	code := http.StatusNotFound
 	var data interface{}
 
 	switch r.Method {
 	case "POST":
-		code, data = p.onPost(w, r)
+		code, data = p.onPost(w, r, l)
 	}
 
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(code)
 	if data != nil {
 		if err := json.NewEncoder(w).Encode(data); err != nil {
-			log.Errorf("encoding error: %s", err)
+			l.Errorf("encoding result error: %s", err)
 		}
 	}
 }

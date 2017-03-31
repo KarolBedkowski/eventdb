@@ -28,8 +28,6 @@ type (
 )
 
 func DBOpen(filename string) (*DB, error) {
-	log.Debugf("globals.openDatabases START %s", filename)
-
 	bdb, err := bolt.Open(filename, 0600, &bolt.Options{Timeout: 10 * time.Second})
 	if err != nil {
 		return nil, err
@@ -58,14 +56,12 @@ func DBOpen(filename string) (*DB, error) {
 }
 
 func (db *DB) Close() error {
-	log.Info("DB.Close")
 	if db.db != nil {
 		p.Unregister(db.metrics)
 		db.metrics = nil
 		db.db.Close()
 		db.db = nil
 	}
-	log.Info("DB.Close DONE")
 	return nil
 }
 
@@ -78,7 +74,11 @@ func (db *DB) NewInternalsHandler() http.Handler {
 	return mux
 }
 
-func (db *DB) backupHandler(w http.ResponseWriter, req *http.Request) {
+func (db *DB) backupHandler(w http.ResponseWriter, r *http.Request) {
+	l := log.With("remote", r.RemoteAddr).With("req", r.RequestURI).
+		With("action", "db.backupHandler")
+
+	l.Debugf("start backup")
 	err := db.db.View(func(tx *bolt.Tx) error {
 		w.Header().Set("Content-Type", "application/octet-stream")
 		w.Header().Set("Content-Disposition", `attachment; filename="`+db.dbFilename+`"`)
@@ -87,11 +87,16 @@ func (db *DB) backupHandler(w http.ResponseWriter, req *http.Request) {
 		return err
 	})
 	if err != nil {
+		l.Errorf("backup error: %s", err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+	l.Debugf("backup finished")
 }
 
-func (db *DB) statsHandler(w http.ResponseWriter, req *http.Request) {
+func (db *DB) statsHandler(w http.ResponseWriter, r *http.Request) {
+	l := log.With("remote", r.RemoteAddr).With("req", r.RequestURI).
+		With("action", "db.statsHandler")
+	l.Debugf("get stats")
 	stats := db.db.Stats()
 	db.statsDiff = db.stats.Sub(&db.stats)
 	db.stats = stats

@@ -108,7 +108,6 @@ func (e *Event) CheckTags(tags []string) bool {
 }
 
 func (db *DB) SaveEvent(e *Event) error {
-	log.Debugf("SaveEvent: %+v", e)
 	return db.db.Update(func(tx *bolt.Tx) error {
 		name := defaultBucket
 		if e.Name != "" {
@@ -133,7 +132,7 @@ func (db *DB) SaveEvent(e *Event) error {
 func getEventsFromBucket(f, t int64, b *bolt.Bucket, bname []byte) []*Event {
 	fkey, err := encodeEventTS(f, nil)
 	if err != nil {
-		log.Errorf("encodeEventTS for %v error: %s", t, err)
+		log.Errorf("ERROR: encodeEventTS for %v error: %s", t, err)
 		fkey = []byte{0}
 	}
 
@@ -142,16 +141,15 @@ func getEventsFromBucket(f, t int64, b *bolt.Bucket, bname []byte) []*Event {
 
 	for k, v := c.Seek(fkey); k != nil; k, v = c.Next() {
 		if ts, err := decodeEventTS(k); err != nil {
-			log.Debugf("decode event ts error: %s", err.Error())
-		} else if ts < f || ts > t {
-			continue
-		}
-		if e, err := decodeEvent(v); err == nil {
-			e.key = k
-			e.bucket = bname
-			events = append(events, e)
-		} else {
-			log.Debugf("decode event error: %s", err.Error())
+			log.Errorf("ERROR: decode event ts error: %s", err.Error())
+		} else if ts >= f && ts <= t {
+			if e, err := decodeEvent(v); err == nil {
+				e.key = k
+				e.bucket = bname
+				events = append(events, e)
+			} else {
+				log.Errorf("ERROR: decode event ts: %v/%v error: %s", k, ts, err.Error())
+			}
 		}
 	}
 
@@ -198,7 +196,7 @@ func (db *DB) GetEvents(from, to time.Time, name string) ([]*Event, error) {
 func getEventsKeyFromBucket(f, t int64, b *bolt.Bucket) [][]byte {
 	fkey, err := encodeEventTS(f, nil)
 	if err != nil {
-		log.Errorf("encodeEventTS for %v error: %s", t, err)
+		log.Errorf("ERROR: encodeEventTS for %v error: %s", t, err)
 		fkey = []byte{0}
 	}
 
@@ -207,13 +205,10 @@ func getEventsKeyFromBucket(f, t int64, b *bolt.Bucket) [][]byte {
 
 	for k, _ := c.Seek(fkey); k != nil; k, _ = c.Next() {
 		if ts, err := decodeEventTS(k); err != nil {
-			log.Debug("decode event error: %v", err)
-			continue
-		} else if ts < f || ts > t {
-			continue
+			log.Errorf("ERROR: decode event error: %v", err)
+		} else if ts >= f && ts <= t {
+			keys = append(keys, k)
 		}
-
-		keys = append(keys, k)
 	}
 
 	return keys

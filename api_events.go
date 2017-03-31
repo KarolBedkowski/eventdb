@@ -53,10 +53,12 @@ type (
 	}
 )
 
-func (e *eventsHandler) onPost(w http.ResponseWriter, r *http.Request) (int, interface{}) {
+func (e *eventsHandler) onPost(w http.ResponseWriter, r *http.Request, l log.Logger) (int, interface{}) {
+	l = l.With("action", "eventsHandler.onPost")
+
 	ev := &eventReq{}
 	if err := json.NewDecoder(r.Body).Decode(ev); err != nil {
-		log.Errorf("unmarshal error: %s", err)
+		l.Debugf("body decode error: %s", err)
 		return 442, "bad request"
 	}
 
@@ -76,13 +78,13 @@ func (e *eventsHandler) onPost(w http.ResponseWriter, r *http.Request) (int, int
 		if t, err := time.Parse(time.RFC3339Nano, ev.Time.(string)); err == nil {
 			event.Time = t.UnixNano()
 		} else {
-			log.Errorf("Parsing time %+v error %s", ev.Time, err)
+			l.Debugf("parsing time %+v error %s", ev.Time, err)
 			return http.StatusBadRequest, "wrong time"
 		}
 	}
 
 	if event.Time == 0 {
-		log.Errorf("wrong time %+v", ev.Time)
+		l.Debugf("wrong time %+v", ev.Time)
 		return http.StatusBadRequest, "wrong time"
 	}
 
@@ -117,7 +119,9 @@ type eventsOnGetResp struct {
 	Events []*Event
 }
 
-func (e *eventsHandler) onGet(w http.ResponseWriter, r *http.Request) (int, interface{}) {
+func (e *eventsHandler) onGet(w http.ResponseWriter, r *http.Request, l log.Logger) (int, interface{}) {
+	l = l.With("action", "eventsHandler.onGet")
+
 	r.ParseForm()
 	vars := r.Form
 
@@ -128,7 +132,7 @@ func (e *eventsHandler) onGet(w http.ResponseWriter, r *http.Request) (int, inte
 		if fts, err := parseTime(vfrom); err == nil {
 			from = fts
 		} else {
-			log.Errorf("wrong from date: %s", err.Error())
+			l.Debugf("wrong from date: %s", err.Error())
 			return http.StatusBadRequest, "wrong from date"
 		}
 	}
@@ -136,7 +140,7 @@ func (e *eventsHandler) onGet(w http.ResponseWriter, r *http.Request) (int, inte
 		if tts, err := parseTime(vto); err == nil {
 			to = tts
 		} else {
-			log.Errorf("wrong to date: %s", err.Error())
+			l.Debugf("wrong to date: %s", err.Error())
 			return http.StatusBadRequest, "wrong to date"
 		}
 	}
@@ -168,7 +172,9 @@ func (e *eventsHandler) onGet(w http.ResponseWriter, r *http.Request) (int, inte
 	return http.StatusOK, response
 }
 
-func (e *eventsHandler) onDelete(w http.ResponseWriter, r *http.Request) (int, interface{}) {
+func (e *eventsHandler) onDelete(w http.ResponseWriter, r *http.Request, l log.Logger) (int, interface{}) {
+	l = l.With("action", "eventsHandler.onDelete")
+
 	r.ParseForm()
 	vars := r.Form
 
@@ -177,15 +183,18 @@ func (e *eventsHandler) onDelete(w http.ResponseWriter, r *http.Request) (int, i
 	if fts, err := parseTime(vars.Get("from")); err == nil {
 		from = fts
 	} else {
-		return http.StatusBadRequest, "wrong 'from' date: " + err.Error()
+		l.Debugf("wrong from date: %s", err.Error())
+		return http.StatusBadRequest, "wrong 'from' date"
 	}
 	if tts, err := parseTime(vars.Get("to")); err == nil {
 		to = tts
 	} else {
-		return http.StatusBadRequest, "wrong 'to' date: " + err.Error()
+		l.Debugf("wrong to date: %s", err.Error())
+		return http.StatusBadRequest, "wrong 'to' date"
 	}
 
 	if to.Before(from) {
+		l.Debugf("wrong to dates to < from")
 		return http.StatusBadRequest, "'to' < 'from'"
 	}
 
@@ -196,30 +205,32 @@ func (e *eventsHandler) onDelete(w http.ResponseWriter, r *http.Request) (int, i
 	if deleted, err := e.DB.DeleteEvents(from, to, name); err == nil {
 		res.Deleted = deleted
 	} else {
-		log.Errorf("delete error: %s", err.Error())
+		l.Errorf("delete error: %s", err.Error())
 		return http.StatusInternalServerError, "delete error"
 	}
 	return http.StatusOK, res
 }
 
 func (e eventsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	l := log.With("remote", r.RemoteAddr).With("req", r.RequestURI)
+
 	code := http.StatusNotFound
 	var data interface{}
 
 	switch r.Method {
 	case "POST":
-		code, data = e.onPost(w, r)
+		code, data = e.onPost(w, r, l)
 	case "GET":
-		code, data = e.onGet(w, r)
+		code, data = e.onGet(w, r, l)
 	case "DELETE":
-		code, data = e.onDelete(w, r)
+		code, data = e.onDelete(w, r, l)
 	}
 
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(code)
 	if data != nil {
 		if err := json.NewEncoder(w).Encode(data); err != nil {
-			log.Errorf("encoding error: %s", err)
+			l.Errorf("encoding result error: %s", err)
 		}
 	}
 }
@@ -230,6 +241,10 @@ type humanEventsHandler struct {
 }
 
 func (h humanEventsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	l := log.With("remote", r.RemoteAddr).
+		With("req", r.RequestURI).
+		With("action", "humanEventsHandler.ServeHTTP")
+
 	r.ParseForm()
 	vars := r.Form
 
@@ -243,7 +258,7 @@ func (h humanEventsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	events, err := h.DB.GetEvents(from, to, name)
 	if err != nil {
-		log.Errorf("get events error: %s", err.Error())
+		l.Errorf("get events error: %s", err.Error())
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
