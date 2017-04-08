@@ -149,7 +149,7 @@ func (v *vacuumWorker) Start() {
 
 	lastRun := prometheus.NewGauge(
 		prometheus.GaugeOpts{
-			Name: "eventdb_vacuum_last_run_unix",
+			Name: "eventdb_vacuum_last_run_time_seconds",
 			Help: "Last run of vacuum routine.",
 		},
 	)
