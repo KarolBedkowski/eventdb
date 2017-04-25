@@ -62,11 +62,15 @@ func (e *eventsHandler) onPost(w http.ResponseWriter, r *http.Request, l log.Log
 		return 442, "bad request"
 	}
 
-	event := &Event{
+	eventBase := &EventBase{
 		Name:  ev.Name,
 		Title: ev.Title,
 		Text:  ev.Text,
 		Tags:  ev.Tags,
+	}
+
+	event := &Event{
+		EventBase: eventBase,
 	}
 
 	switch ev.Time.(type) {

@@ -86,7 +86,9 @@ func (p *PromWebHookHandler) onPost(w http.ResponseWriter, r *http.Request, l lo
 		}
 
 		e := &Event{
-			Time: a.StartsAt.UnixNano(),
+			EventBase: &EventBase{
+				Time: a.StartsAt.UnixNano(),
+			},
 		}
 
 		if v, ok := a.Annotations["summary"]; ok {

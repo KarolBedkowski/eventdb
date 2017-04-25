@@ -1,0 +1,8 @@
+
+struct EventBase {
+	Name  string
+	Title string
+	Time  int64
+	Text  string
+	Tags  string
+}

@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/gob"
+	"errors"
 	"fmt"
 	"github.com/boltdb/bolt"
 	"github.com/prometheus/common/log"
@@ -16,12 +17,7 @@ import (
 )
 
 type Event struct {
-	Name  string
-	Title string
-	// Time in nanos
-	Time int64
-	Text string
-	Tags string
+	*EventBase
 
 	// internals
 	key    []byte
@@ -33,15 +29,53 @@ var defaultBucket = []byte("__default__")
 const AnyBucket = "_any_"
 
 func init() {
-	gob.Register(&Event{})
+	gob.Register(&EventBase{})
+}
+
+func decodeEventGOB(e []byte) (*Event, error) {
+	evb := &EventBase{}
+	r := bytes.NewBuffer(e)
+	dec := gob.NewDecoder(r)
+	if err := dec.Decode(evb); err != nil {
+		return nil, err
+	}
+
+	ev := &Event{
+		EventBase: evb,
+	}
+	return ev, nil
+}
+
+var DecodeError = errors.New("decode error")
+
+func decodeEventG(evb *EventBase, e []byte) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = DecodeError
+		}
+	}()
+
+	_, err = evb.Unmarshal(e)
+	return
 }
 
 func decodeEvent(e []byte) (*Event, error) {
-	r := bytes.NewBuffer(e)
-	ev := &Event{}
-	dec := gob.NewDecoder(r)
-	err := dec.Decode(ev)
-	return ev, err
+	evb := &EventBase{}
+	var err error
+	if err = decodeEventG(evb, e); err != nil {
+		r := bytes.NewBuffer(e)
+		dec := gob.NewDecoder(r)
+		err = dec.Decode(evb)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	ev := &Event{
+		EventBase: evb,
+	}
+	return ev, nil
 }
 
 func decodeEventTS(k []byte) (int64, error) {
@@ -68,17 +102,32 @@ func encodeEventTS(ts int64, data []byte) ([]byte, error) {
 	return key.Bytes(), nil
 }
 
-func (e *Event) encode() ([]byte, []byte, error) {
+// legacy
+func (e *Event) encodeGOB() ([]byte, []byte, error) {
 	// KEY: ts(int64)crc(4) (12bytes)
 	r := new(bytes.Buffer)
 	enc := gob.NewEncoder(r)
-	if err := enc.Encode(e); err != nil {
+	if err := enc.Encode(e.EventBase); err != nil {
 		return nil, nil, err
 	}
 
 	key, err := encodeEventTS(e.Time, r.Bytes())
 	e.key = key
 	return r.Bytes(), key, err
+}
+
+func (e *Event) encode() ([]byte, []byte, error) {
+	// KEY: ts(int64)crc(4) (12bytes)
+
+	buf, err := e.EventBase.Marshal(nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	key, err := encodeEventTS(e.Time, buf)
+	e.key = key
+
+	return buf, key, err
 }
 
 func (e *Event) CheckTags(tags []string) bool {

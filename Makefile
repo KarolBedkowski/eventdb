@@ -21,19 +21,22 @@ LDFLAGS_PI="-w -s \
 	-X github.com/prometheus/common/version.BuildUser='$(USER)' \
 	-X github.com/prometheus/common/version.Branch='$(BRANCH)'"
 
-build:
+build: *.schema.gen.go
 	go build -v -o eventdb --ldflags $(LDFLAGS)
 
-build_pi:
+build_pi: *.schema.gen.go
 	GOGCCFLAGS="-fPIC -O4 -Ofast -pipe -march=native -mcpu=arm1176jzf-s -mfpu=vfp -mfloat-abi=hard -s" \
 		GOARCH=arm GOARM=6 \
 		go build -v -o eventdb-arm --ldflags $(LDFLAGS_PI)
 
 run:
 	#go run -v *.go -log.level debug
-	go-reload *.go -log.level debug
+	go-reload `ls *.go | grep -v _test.go` -log.level debug
 
 clean:
 	rm -f eventdb eventdb-arm
+
+%.schema.gen.go: %.schema
+	gencode go -schema $< -package main
 
 # vim:ft=make
