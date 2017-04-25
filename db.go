@@ -17,6 +17,7 @@ import (
 )
 
 type (
+	// DB represent bolt database
 	DB struct {
 		dbFilename string
 		db         *bolt.DB
@@ -27,6 +28,7 @@ type (
 	}
 )
 
+// DBOpen open or create bolt database
 func DBOpen(filename string) (*DB, error) {
 	bdb, err := bolt.Open(filename, 0600, &bolt.Options{Timeout: 10 * time.Second})
 	if err != nil {
@@ -55,6 +57,7 @@ func DBOpen(filename string) (*DB, error) {
 	return db, nil
 }
 
+// Close database
 func (db *DB) Close() error {
 	if db.db != nil {
 		p.Unregister(db.metrics)
@@ -65,6 +68,7 @@ func (db *DB) Close() error {
 	return nil
 }
 
+// NewInternalsHandler create http handlers related to database
 func (db *DB) NewInternalsHandler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/backup", db.backupHandler)

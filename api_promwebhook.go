@@ -17,27 +17,27 @@ import (
 )
 
 type (
-	KV map[string]string
+	kv map[string]string
 
-	Alert struct {
+	alert struct {
 		Status       string    `json:"status"`
-		Labels       KV        `json:"labels"`
-		Annotations  KV        `json:"annotations"`
+		Labels       kv        `json:"labels"`
+		Annotations  kv        `json:"annotations"`
 		StartsAt     time.Time `json:"startsAt"`
 		EndsAt       time.Time `json:"endsAt"`
 		GeneratorURL string    `json:"generatorURL"`
 	}
 
-	Alerts []Alert
+	alerts []alert
 
-	WebhookMessage struct {
+	webhookMessage struct {
 		Receiver string `json:"receiver"`
 		Status   string `json:"status"`
-		Alerts   Alerts `json:"alerts"`
+		Alerts   alerts `json:"alerts"`
 
-		GroupLabels       KV `json:"groupLabels"`
-		CommonLabels      KV `json:"commonLabels"`
-		CommonAnnotations KV `json:"commonAnnotations"`
+		GroupLabels       kv `json:"groupLabels"`
+		CommonLabels      kv `json:"commonLabels"`
+		CommonAnnotations kv `json:"commonAnnotations"`
 
 		ExternalURL string `json:"externalURL"`
 
@@ -45,13 +45,14 @@ type (
 		GroupKey uint64 `json:"groupKey"`
 	}
 
+	// PromWebHookHandler handle all request from AlertManager
 	PromWebHookHandler struct {
 		Configuration *Configuration
 		DB            *DB
 	}
 )
 
-func (k KV) String() string {
+func (k kv) String() string {
 	out := make([]string, 0, len(k))
 	for k, v := range k {
 		k = strings.TrimSpace(k)
@@ -66,7 +67,7 @@ func (k KV) String() string {
 func (p *PromWebHookHandler) onPost(w http.ResponseWriter, r *http.Request, l log.Logger) (int, interface{}) {
 	l = l.With("action", "PromWebHookHandler.onPost")
 
-	m := &WebhookMessage{}
+	m := &webhookMessage{}
 	if err := json.NewDecoder(r.Body).Decode(m); err != nil {
 		l.Debugf("decode body error: %s; %+v", err, r.Body)
 		return 442, "bad request"

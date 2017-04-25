@@ -18,6 +18,10 @@ import (
 
 var defaultBucket = []byte("__default__")
 
+// ErrDecodeError when unmarshaling data
+var ErrDecodeError = errors.New("decode error")
+
+// AnyBucket means select all buckets
 const AnyBucket = "_any_"
 
 func init() {
@@ -35,12 +39,10 @@ func decodeEventGOB(e []byte) (*Event, error) {
 	return ev, nil
 }
 
-var DecodeError = errors.New("decode error")
-
 func decodeEventG(ev *Event, data []byte) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = DecodeError
+			err = ErrDecodeError
 		}
 	}()
 
@@ -108,6 +110,7 @@ func (e *Event) encode() ([]byte, []byte, error) {
 	return buf, key, err
 }
 
+// CheckTags check if event has all `tags`
 func (e *Event) CheckTags(tags []string) bool {
 	if tags == nil || len(tags) == 0 {
 		return true
@@ -134,6 +137,7 @@ func (e *Event) CheckTags(tags []string) bool {
 	return true
 }
 
+// SaveEvent to database
 func (db *DB) SaveEvent(e *Event) error {
 	return db.db.Update(func(tx *bolt.Tx) error {
 		name := defaultBucket
@@ -181,6 +185,7 @@ func getEventsFromBucket(f, t int64, b *bolt.Bucket, bname []byte) []*Event {
 	return events
 }
 
+// GetEvents from database according to `from`-`to` time range and bucket `name`
 func (db *DB) GetEvents(from, to time.Time, name string) ([]*Event, error) {
 	log.Debugf("GetEvents %s - %s [%s]", from, to, name)
 
@@ -206,12 +211,12 @@ func (db *DB) GetEvents(from, to time.Time, name string) ([]*Event, error) {
 			bname = []byte(name)
 		}
 
-		if b := tx.Bucket(bname); b == nil {
+		b := tx.Bucket(bname)
+		if b == nil {
 			return fmt.Errorf("unknown bucket name: %v", name)
-		} else {
-			events = getEventsFromBucket(f, t, b, bname)
 		}
 
+		events = getEventsFromBucket(f, t, b, bname)
 		return nil
 	})
 
@@ -239,6 +244,7 @@ func getEventsKeyFromBucket(f, t int64, b *bolt.Bucket) [][]byte {
 	return keys
 }
 
+// DeleteEvents from database according to `from`-`to` time range and bucket `name`
 func (db *DB) DeleteEvents(from, to time.Time, name string) (int, error) {
 	f := from.UnixNano()
 	t := to.UnixNano()
@@ -266,9 +272,11 @@ func (db *DB) DeleteEvents(from, to time.Time, name string) (int, error) {
 			bname = []byte(name)
 		}
 
-		if b := tx.Bucket(bname); b == nil {
+		b := tx.Bucket(bname)
+		if b == nil {
 			return fmt.Errorf("unknown bucket name: %v", name)
-		} else {
+		}
+		{
 			keys := getEventsKeyFromBucket(f, t, b)
 			for _, k := range keys {
 				if err := b.Delete(k); err != nil {

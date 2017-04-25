@@ -40,6 +40,7 @@ type (
 		Tags string `json:"tags"`
 	}
 
+	// AnnotationHandler for grafana annotations requests
 	AnnotationHandler struct {
 		DB *DB
 	}
