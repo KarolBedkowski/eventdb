@@ -103,7 +103,7 @@ func (p *PromWebHookHandler) onPost(w http.ResponseWriter, r *http.Request, l lo
 		}
 		e.Text += "\n\n" + a.Labels.String()
 		if v, ok := a.Labels["tags"]; ok {
-			e.Tags = strings.TrimSpace(v)
+			e.SetTags(strings.TrimSpace(v))
 		}
 		if v, ok := a.Labels["name"]; ok {
 			e.Name = strings.TrimSpace(v)

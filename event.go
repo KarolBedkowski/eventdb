@@ -6,7 +6,6 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
-	"encoding/gob"
 	"errors"
 	"fmt"
 	"github.com/boltdb/bolt"
@@ -25,39 +24,31 @@ var ErrDecodeError = errors.New("decode error")
 const AnyBucket = "_any_"
 
 func init() {
-	gob.Register(&Event{})
 }
 
-func decodeEventGOB(e []byte) (*Event, error) {
-	ev := &Event{}
-	r := bytes.NewBuffer(e)
-	dec := gob.NewDecoder(r)
-	if err := dec.Decode(ev); err != nil {
-		return nil, err
+func (e *Event) SetTags(t string) {
+	var tags []string
+	for _, ts1 := range strings.Split(t, " ") {
+		for _, ts2 := range strings.Split(ts1, ",") {
+			ts2 = strings.TrimSpace(ts2)
+			if ts2 != "" {
+				tags = append(tags, ts2)
+			}
+		}
 	}
-
-	return ev, nil
+	e.Tags = tags
 }
 
-func decodeEventG(ev *Event, data []byte) (err error) {
+func decodeEvent(data []byte) (ev *Event, err error) {
+	ev = &Event{}
+
 	defer func() {
 		if r := recover(); r != nil {
 			err = ErrDecodeError
 		}
 	}()
 
-	_, err = ev.Unmarshal(data)
-	return
-}
-
-func decodeEvent(data []byte) (*Event, error) {
-	ev := &Event{}
-	var err error
-	if err = decodeEventG(ev, data); err != nil {
-		r := bytes.NewBuffer(data)
-		dec := gob.NewDecoder(r)
-		err = dec.Decode(ev)
-	}
+	_, err = ev.Unmarshal(data[1:])
 	return ev, err
 }
 
@@ -85,19 +76,6 @@ func encodeEventTS(ts int64, data []byte) ([]byte, error) {
 	return key.Bytes(), nil
 }
 
-// legacy
-func (e *Event) encodeGOB() ([]byte, []byte, error) {
-	// KEY: ts(int64)crc(4) (12bytes)
-	r := new(bytes.Buffer)
-	enc := gob.NewEncoder(r)
-	if err := enc.Encode(e); err != nil {
-		return nil, nil, err
-	}
-
-	key, err := encodeEventTS(e.Time, r.Bytes())
-	return r.Bytes(), key, err
-}
-
 func (e *Event) encode() ([]byte, []byte, error) {
 	// KEY: ts(int64)crc(4) (12bytes)
 
@@ -107,6 +85,12 @@ func (e *Event) encode() ([]byte, []byte, error) {
 	}
 
 	key, err := encodeEventTS(e.Time, buf)
+
+	if err == nil {
+		// prefix by version
+		buf = append([]byte{1}, buf...)
+	}
+
 	return buf, key, err
 }
 
@@ -116,14 +100,13 @@ func (e *Event) CheckTags(tags []string) bool {
 		return true
 	}
 
-	if e.Tags == "" {
+	if e.Tags == nil || len(e.Tags) == 0 {
 		return false
 	}
 
-	etags := strings.Split(e.Tags, " ")
 	for _, t := range tags {
 		found := false
-		for _, et := range etags {
+		for _, et := range e.Tags {
 			if t == et {
 				found = true
 				break
@@ -174,10 +157,24 @@ func getEventsFromBucket(f, t int64, b *bolt.Bucket, bname []byte) []*Event {
 		if ts, err := decodeEventTS(k); err != nil {
 			log.Errorf("ERROR: decode event ts error: %s", err.Error())
 		} else if ts >= f && ts <= t {
-			if e, err := decodeEvent(v); err == nil {
+			var err error
+			var e *Event
+
+			if v == nil || len(v) < 2 {
+				err = fmt.Errorf("invalid data")
+			} else {
+				switch v[0] {
+				case 1:
+					e, err = decodeEvent(v)
+				default:
+					err = fmt.Errorf("invalid version: %v", v[0])
+				}
+			}
+
+			if err == nil && e != nil {
 				events = append(events, e)
 			} else {
-				log.Errorf("ERROR: decode event ts: %v/%v error: %s", k, ts, err.Error())
+				log.Errorf("ERROR: decode event ts: %v/%v error: %s", k, ts, err)
 			}
 		}
 	}

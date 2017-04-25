@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"github.com/prometheus/common/log"
 	"net/http"
+	"strings"
 )
 
 type (
@@ -86,7 +87,7 @@ func (a *AnnotationHandler) onPost(w http.ResponseWriter, r *http.Request, l log
 			Title:      e.Title,
 			Time:       e.Time / 1000000,
 			Text:       e.Text,
-			Tags:       e.Tags,
+			Tags:       strings.Join(e.Tags, " "),
 		})
 	}
 

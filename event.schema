@@ -4,5 +4,5 @@ struct Event {
 	Title string
 	Time  int64
 	Text  string
-	Tags  string
+	Tags  []string
 }

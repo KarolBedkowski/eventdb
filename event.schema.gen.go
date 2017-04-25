@@ -17,7 +17,7 @@ type Event struct {
 	Title string
 	Time  int64
 	Text  string
-	Tags  string
+	Tags  []string
 }
 
 func (d *Event) Size() (s uint64) {
@@ -80,7 +80,27 @@ func (d *Event) Size() (s uint64) {
 			s++
 
 		}
-		s += l
+
+		for k0 := range d.Tags {
+
+			{
+				l := uint64(len(d.Tags[k0]))
+
+				{
+
+					t := l
+					for t >= 0x80 {
+						t >>= 7
+						s++
+					}
+					s++
+
+				}
+				s += l
+			}
+
+		}
+
 	}
 	s += 8
 	return
@@ -188,8 +208,29 @@ func (d *Event) Marshal(buf []byte) ([]byte, error) {
 			i++
 
 		}
-		copy(buf[i+8:], d.Tags)
-		i += l
+		for k0 := range d.Tags {
+
+			{
+				l := uint64(len(d.Tags[k0]))
+
+				{
+
+					t := uint64(l)
+
+					for t >= 0x80 {
+						buf[i+8] = byte(t) | 0x80
+						t >>= 7
+						i++
+					}
+					buf[i+8] = byte(t)
+					i++
+
+				}
+				copy(buf[i+8:], d.Tags[k0])
+				i += l
+			}
+
+		}
 	}
 	return buf[:i+8], nil
 }
@@ -279,8 +320,35 @@ func (d *Event) Unmarshal(buf []byte) (uint64, error) {
 			l = t
 
 		}
-		d.Tags = string(buf[i+8 : i+8+l])
-		i += l
+		if uint64(cap(d.Tags)) >= l {
+			d.Tags = d.Tags[:l]
+		} else {
+			d.Tags = make([]string, l)
+		}
+		for k0 := range d.Tags {
+
+			{
+				l := uint64(0)
+
+				{
+
+					bs := uint8(7)
+					t := uint64(buf[i+8] & 0x7F)
+					for buf[i+8]&0x80 == 0x80 {
+						i++
+						t |= uint64(buf[i+8]&0x7F) << bs
+						bs += 7
+					}
+					i++
+
+					l = t
+
+				}
+				d.Tags[k0] = string(buf[i+8 : i+8+l])
+				i += l
+			}
+
+		}
 	}
 	return i + 8, nil
 }

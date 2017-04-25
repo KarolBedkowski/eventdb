@@ -21,22 +21,10 @@ func generateEvents() []*Event {
 			Title: "bbbbbbbbbbbbbbbb",
 			Time:  int64(i),
 			Text:  "ccccccccccccccccccccccccccccccccccccccccc",
-			Tags:  "1023091039013901930",
+			Tags:  []string{"10230", "9103", "90139", "01930"},
 		})
 	}
 	return e
-}
-
-func marshalGOBEvents() [][]byte {
-	m := make([][]byte, 1000, 1000)
-	var err error
-	for i, e := range generateEvents() {
-		m[i], _, err = e.encodeGOB()
-		if err != nil {
-			log.Fatalf("marshalGOBEvents error: %s", err)
-		}
-	}
-	return m
 }
 
 func marshalEvents() [][]byte {
@@ -51,19 +39,6 @@ func marshalEvents() [][]byte {
 	return m
 }
 
-func BenchmarkMarshalGOB(b *testing.B) {
-	b.StopTimer()
-	data := generateEvents()
-	b.ReportAllocs()
-	b.StartTimer()
-	for i := 0; i < b.N; i++ {
-		e := data[i%1000]
-		if _, _, err := e.encodeGOB(); err != nil {
-			b.Fatalf("marshal error: %s", err.Error())
-		}
-	}
-}
-
 func BenchmarkMarshal(b *testing.B) {
 	b.StopTimer()
 	data := generateEvents()
@@ -73,19 +48,6 @@ func BenchmarkMarshal(b *testing.B) {
 		e := data[i%1000]
 		if _, _, err := e.encode(); err != nil {
 			b.Fatalf("marshal error: %s", err.Error())
-		}
-	}
-}
-
-func BenchmarkUnmarshalGOB(b *testing.B) {
-	b.StopTimer()
-	data := marshalGOBEvents()
-	b.ReportAllocs()
-	b.StartTimer()
-	for i := 0; i < b.N; i++ {
-		m := data[i%1000]
-		if _, err := decodeEventGOB(m); err != nil {
-			b.Fatalf("unmarshal error: %s", err.Error())
 		}
 	}
 }
@@ -116,31 +78,10 @@ func eventsCompare(e, e2 *Event, t *testing.T) {
 	if e.Text != e2.Text {
 		t.Fatalf("text not match: %+v vs %+v", e, e2)
 	}
-	if e.Tags != e2.Tags {
-		t.Fatalf("tags not match: %+v vs %+v", e, e2)
-	}
-}
-
-func TestMarshalGOB(t *testing.T) {
-	for i := 0; i < 1000; i++ {
-		e := &Event{
-			Name:  randomStr(0),
-			Title: randomStr(0),
-			Time:  int64(i),
-			Text:  randomStr(0),
-			Tags:  randomStr(0),
+	for i, tag := range e.Tags {
+		if tag != e2.Tags[i] {
+			t.Fatalf("tags not match: %+v vs %+v", e, e2)
 		}
-
-		data, _, err := e.encodeGOB()
-		if err != nil {
-			t.Fatalf("encode error: %s (%+v)", err, e)
-		}
-
-		e2, err := decodeEventGOB(data)
-		if err != nil {
-			t.Fatalf("decode error: %s (%+v)", err, e)
-		}
-		eventsCompare(e, e2, t)
 	}
 }
 
@@ -151,8 +92,8 @@ func TestMarshal(t *testing.T) {
 			Title: randomStr(0),
 			Time:  int64(i),
 			Text:  randomStr(0),
-			Tags:  randomStr(0),
 		}
+		e.SetTags(randomStr(50))
 
 		data, _, err := e.encode()
 		if err != nil {
@@ -167,7 +108,7 @@ func TestMarshal(t *testing.T) {
 	}
 }
 
-var runes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890<>?:\"{}|_+,./;'[]\\-=!@#$%^&*()`~`'")
+var runes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890<>?:\"{}|_+,./;'[]\\-=!@#$%^&*()`~`' ")
 
 func randomStr(n int) string {
 	if n <= 0 {

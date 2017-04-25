@@ -66,7 +66,10 @@ func (e *eventsHandler) onPost(w http.ResponseWriter, r *http.Request, l log.Log
 		Name:  ev.Name,
 		Title: ev.Title,
 		Text:  ev.Text,
-		Tags:  ev.Tags,
+	}
+
+	if ev.Tags != "" {
+		event.SetTags(ev.Tags)
 	}
 
 	switch ev.Time.(type) {
