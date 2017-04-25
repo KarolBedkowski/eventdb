@@ -12,7 +12,7 @@ var (
 	_ = time.Now()
 )
 
-type EventBase struct {
+type Event struct {
 	Name  string
 	Title string
 	Time  int64
@@ -20,7 +20,7 @@ type EventBase struct {
 	Tags  string
 }
 
-func (d *EventBase) Size() (s uint64) {
+func (d *Event) Size() (s uint64) {
 
 	{
 		l := uint64(len(d.Name))
@@ -85,7 +85,7 @@ func (d *EventBase) Size() (s uint64) {
 	s += 8
 	return
 }
-func (d *EventBase) Marshal(buf []byte) ([]byte, error) {
+func (d *Event) Marshal(buf []byte) ([]byte, error) {
 	size := d.Size()
 	{
 		if uint64(cap(buf)) >= size {
@@ -194,7 +194,7 @@ func (d *EventBase) Marshal(buf []byte) ([]byte, error) {
 	return buf[:i+8], nil
 }
 
-func (d *EventBase) Unmarshal(buf []byte) (uint64, error) {
+func (d *Event) Unmarshal(buf []byte) (uint64, error) {
 	i := uint64(0)
 
 	{

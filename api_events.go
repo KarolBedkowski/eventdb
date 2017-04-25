@@ -62,15 +62,11 @@ func (e *eventsHandler) onPost(w http.ResponseWriter, r *http.Request, l log.Log
 		return 442, "bad request"
 	}
 
-	eventBase := &EventBase{
+	event := &Event{
 		Name:  ev.Name,
 		Title: ev.Title,
 		Text:  ev.Text,
 		Tags:  ev.Tags,
-	}
-
-	event := &Event{
-		EventBase: eventBase,
 	}
 
 	switch ev.Time.(type) {
@@ -278,9 +274,6 @@ func (h humanEventsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		ts := time.Unix(0, e.Time)
 		w.Write([]byte(fmt.Sprintf("%d. %s   Name: %v\nTitle: %s\nText: %s\nTags: %s\n",
 			(i + 1), ts, e.Name, e.Title, e.Text, e.Tags)))
-		if h.Configuration.Debug {
-			w.Write([]byte(fmt.Sprintf("bucket: %s   key: %x\n", string(e.bucket), e.key)))
-		}
 		w.Write([]byte{'\n', '\n'})
 	}
 }

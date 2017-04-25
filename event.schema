@@ -1,5 +1,5 @@
 
-struct EventBase {
+struct Event {
 	Name  string
 	Title string
 	Time  int64

@@ -17,13 +17,11 @@ func generateEvents() []*Event {
 	e := make([]*Event, 0, 100)
 	for i := 0; i < 1000; i++ {
 		e = append(e, &Event{
-			EventBase: &EventBase{
-				Name:  "aaa",
-				Title: "bbbbbbbbbbbbbbbb",
-				Time:  int64(i),
-				Text:  "ccccccccccccccccccccccccccccccccccccccccc",
-				Tags:  "1023091039013901930",
-			},
+			Name:  "aaa",
+			Title: "bbbbbbbbbbbbbbbb",
+			Time:  int64(i),
+			Text:  "ccccccccccccccccccccccccccccccccccccccccc",
+			Tags:  "1023091039013901930",
 		})
 	}
 	return e
@@ -106,19 +104,19 @@ func BenchmarkUnmarshal(b *testing.B) {
 }
 
 func eventsCompare(e, e2 *Event, t *testing.T) {
-	if e.EventBase.Name != e2.EventBase.Name {
+	if e.Name != e2.Name {
 		t.Fatalf("name not match: %+v vs %+v", e, e2)
 	}
-	if e.EventBase.Title != e2.EventBase.Title {
+	if e.Title != e2.Title {
 		t.Fatalf("title not match: %+v vs %+v", e, e2)
 	}
-	if e.EventBase.Time != e2.EventBase.Time {
+	if e.Time != e2.Time {
 		t.Fatalf("time not match: %+v vs %+v", e, e2)
 	}
-	if e.EventBase.Text != e2.EventBase.Text {
+	if e.Text != e2.Text {
 		t.Fatalf("text not match: %+v vs %+v", e, e2)
 	}
-	if e.EventBase.Tags != e2.EventBase.Tags {
+	if e.Tags != e2.Tags {
 		t.Fatalf("tags not match: %+v vs %+v", e, e2)
 	}
 }
@@ -126,13 +124,11 @@ func eventsCompare(e, e2 *Event, t *testing.T) {
 func TestMarshalGOB(t *testing.T) {
 	for i := 0; i < 1000; i++ {
 		e := &Event{
-			EventBase: &EventBase{
-				Name:  randomStr(0),
-				Title: randomStr(0),
-				Time:  int64(i),
-				Text:  randomStr(0),
-				Tags:  randomStr(0),
-			},
+			Name:  randomStr(0),
+			Title: randomStr(0),
+			Time:  int64(i),
+			Text:  randomStr(0),
+			Tags:  randomStr(0),
 		}
 
 		data, _, err := e.encodeGOB()
@@ -151,13 +147,11 @@ func TestMarshalGOB(t *testing.T) {
 func TestMarshal(t *testing.T) {
 	for i := 0; i < 1000; i++ {
 		e := &Event{
-			EventBase: &EventBase{
-				Name:  randomStr(0),
-				Title: randomStr(0),
-				Time:  int64(i),
-				Text:  randomStr(0),
-				Tags:  randomStr(0),
-			},
+			Name:  randomStr(0),
+			Title: randomStr(0),
+			Time:  int64(i),
+			Text:  randomStr(0),
+			Tags:  randomStr(0),
 		}
 
 		data, _, err := e.encode()

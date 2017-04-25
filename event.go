@@ -16,66 +16,47 @@ import (
 	"time"
 )
 
-type Event struct {
-	*EventBase
-
-	// internals
-	key    []byte
-	bucket []byte
-}
-
 var defaultBucket = []byte("__default__")
 
 const AnyBucket = "_any_"
 
 func init() {
-	gob.Register(&EventBase{})
+	gob.Register(&Event{})
 }
 
 func decodeEventGOB(e []byte) (*Event, error) {
-	evb := &EventBase{}
+	ev := &Event{}
 	r := bytes.NewBuffer(e)
 	dec := gob.NewDecoder(r)
-	if err := dec.Decode(evb); err != nil {
+	if err := dec.Decode(ev); err != nil {
 		return nil, err
 	}
 
-	ev := &Event{
-		EventBase: evb,
-	}
 	return ev, nil
 }
 
 var DecodeError = errors.New("decode error")
 
-func decodeEventG(evb *EventBase, e []byte) (err error) {
+func decodeEventG(ev *Event, data []byte) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = DecodeError
 		}
 	}()
 
-	_, err = evb.Unmarshal(e)
+	_, err = ev.Unmarshal(data)
 	return
 }
 
-func decodeEvent(e []byte) (*Event, error) {
-	evb := &EventBase{}
+func decodeEvent(data []byte) (*Event, error) {
+	ev := &Event{}
 	var err error
-	if err = decodeEventG(evb, e); err != nil {
-		r := bytes.NewBuffer(e)
+	if err = decodeEventG(ev, data); err != nil {
+		r := bytes.NewBuffer(data)
 		dec := gob.NewDecoder(r)
-		err = dec.Decode(evb)
+		err = dec.Decode(ev)
 	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	ev := &Event{
-		EventBase: evb,
-	}
-	return ev, nil
+	return ev, err
 }
 
 func decodeEventTS(k []byte) (int64, error) {
@@ -107,26 +88,23 @@ func (e *Event) encodeGOB() ([]byte, []byte, error) {
 	// KEY: ts(int64)crc(4) (12bytes)
 	r := new(bytes.Buffer)
 	enc := gob.NewEncoder(r)
-	if err := enc.Encode(e.EventBase); err != nil {
+	if err := enc.Encode(e); err != nil {
 		return nil, nil, err
 	}
 
 	key, err := encodeEventTS(e.Time, r.Bytes())
-	e.key = key
 	return r.Bytes(), key, err
 }
 
 func (e *Event) encode() ([]byte, []byte, error) {
 	// KEY: ts(int64)crc(4) (12bytes)
 
-	buf, err := e.EventBase.Marshal(nil)
+	buf, err := e.Marshal(nil)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	key, err := encodeEventTS(e.Time, buf)
-	e.key = key
-
 	return buf, key, err
 }
 
@@ -193,8 +171,6 @@ func getEventsFromBucket(f, t int64, b *bolt.Bucket, bname []byte) []*Event {
 			log.Errorf("ERROR: decode event ts error: %s", err.Error())
 		} else if ts >= f && ts <= t {
 			if e, err := decodeEvent(v); err == nil {
-				e.key = k
-				e.bucket = bname
 				events = append(events, e)
 			} else {
 				log.Errorf("ERROR: decode event ts: %v/%v error: %s", k, ts, err.Error())
