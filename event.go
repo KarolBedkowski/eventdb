@@ -26,6 +26,7 @@ const AnyBucket = "_any_"
 func init() {
 }
 
+// SetTags parse string into tags list
 func (e *Event) SetTags(t string) {
 	var tags []string
 	for _, ts1 := range strings.Split(t, " ") {
@@ -39,27 +40,68 @@ func (e *Event) SetTags(t string) {
 	e.Tags = tags
 }
 
-func decodeEvent(data []byte) (ev *Event, err error) {
-	ev = &Event{}
-
+// Decode event
+func (e *Event) decode(data []byte) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = ErrDecodeError
 		}
 	}()
 
-	_, err = ev.Unmarshal(data[1:])
-	return ev, err
+	_, err = e.Unmarshal(data[1:])
+	return err
 }
 
-func decodeEventTS(k []byte) (int64, error) {
+// decode event ts - legacy
+func decodeEventTS2(data []byte) (int64, error) {
 	var ts int64
-	buf := bytes.NewReader(k[:8])
+	buf := bytes.NewReader(data[:8])
 	err := binary.Read(buf, binary.BigEndian, &ts)
 	return ts, err
 }
 
+// decode event ts
+func decodeEventTS(data []byte) (int64, error) {
+	if len(data) < 8 {
+		return 0, ErrDecodeError
+	}
+	ts := int64(0)
+	ts |= int64(data[0]) << 56
+	ts |= int64(data[1]) << 48
+	ts |= int64(data[2]) << 40
+	ts |= int64(data[3]) << 32
+	ts |= int64(data[4]) << 24
+	ts |= int64(data[5]) << 16
+	ts |= int64(data[6]) << 8
+	ts |= int64(data[7])
+	return ts, nil
+}
+
+// encode event ts
 func encodeEventTS(ts int64, data []byte) ([]byte, error) {
+	buf := make([]byte, 8)
+	buf[0] = byte((ts >> 56) & 0xff)
+	buf[1] = byte((ts >> 48) & 0xff)
+	buf[2] = byte((ts >> 40) & 0xff)
+	buf[3] = byte((ts >> 32) & 0xff)
+	buf[4] = byte((ts >> 24) & 0xff)
+	buf[5] = byte((ts >> 16) & 0xff)
+	buf[6] = byte((ts >> 8) & 0xff)
+	buf[7] = byte(ts & 0xff)
+	if data != nil {
+		hash := adler32.Checksum(data)
+		buf = append(buf,
+			byte((hash>>3)&0xff),
+			byte((hash>>2)&0xff),
+			byte((hash>>1)&0xff),
+			byte(hash&0xff),
+		)
+	}
+	return buf, nil
+}
+
+// encode event - legacy
+func encodeEventTS2(ts int64, data []byte) ([]byte, error) {
 	key := new(bytes.Buffer)
 	if err := binary.Write(key, binary.BigEndian, ts); err != nil {
 		return nil, err
@@ -76,9 +118,9 @@ func encodeEventTS(ts int64, data []byte) ([]byte, error) {
 	return key.Bytes(), nil
 }
 
+// encode (marshal) Event
 func (e *Event) encode() ([]byte, []byte, error) {
 	// KEY: ts(int64)crc(4) (12bytes)
-
 	buf, err := e.Marshal(nil)
 	if err != nil {
 		return nil, nil, err
@@ -158,14 +200,14 @@ func getEventsFromBucket(f, t int64, b *bolt.Bucket, bname []byte) []*Event {
 			log.Errorf("ERROR: decode event ts error: %s", err.Error())
 		} else if ts >= f && ts <= t {
 			var err error
-			var e *Event
+			e := &Event{}
 
 			if v == nil || len(v) < 2 {
 				err = fmt.Errorf("invalid data")
 			} else {
 				switch v[0] {
 				case 1:
-					e, err = decodeEvent(v)
+					err = e.decode(v)
 				default:
 					err = fmt.Errorf("invalid version: %v", v[0])
 				}
