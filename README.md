@@ -12,7 +12,12 @@ Prometheus Alert Manager.
 * github.com/prometheus/client_golang/
 * github.com/prometheus/common
 * github.com/boltdb/bolt
+* github.com/boltdb/boltd
 * gopkg.in/yaml.v2
+
+For development:
+
+* https://github.com/andyleap/gencode
 
 
 ### Local Build & Run
@@ -20,7 +25,17 @@ Prometheus Alert Manager.
     go build
     ./eventdb
 
-Configuration file: `eventdb.yml`
+### Options
+
+* `-config.file string` Path to configuration file. (default `eventdb.yml`)
+* `-log.format value` Set the log target and format. Example:
+  `logger:syslog?appname=bob&local=7` or `logger:stdout?json=true`
+  (default `logger:stderr`)
+* `-log.level value` Only log messages with the given severity or above. Valid
+  levels: [debug, info, warn, error, fatal] (default `info`)
+* `-version` Print version information.
+* `-web.listen-address string` Address to listen on for web interface and
+  telemetry. (default `:9701`)
 
 
 # License
