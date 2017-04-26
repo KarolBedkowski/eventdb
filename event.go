@@ -252,7 +252,8 @@ func (db *DB) GetEvents(from, to time.Time, name string) ([]*Event, error) {
 
 		b := tx.Bucket(bname)
 		if b == nil {
-			return fmt.Errorf("unknown bucket name: %v", name)
+			log.Infof("unknown bucket name: %v", name)
+			return nil
 		}
 
 		events = getEventsFromBucket(f, t, b, bname)
@@ -313,7 +314,8 @@ func (db *DB) DeleteEvents(from, to time.Time, name string) (int, error) {
 
 		b := tx.Bucket(bname)
 		if b == nil {
-			return fmt.Errorf("unknown bucket name: %v", name)
+			log.Infof("unknown bucket name: %v", name)
+			return nil
 		}
 		{
 			keys := getEventsKeyFromBucket(f, t, b)
