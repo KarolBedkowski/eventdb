@@ -41,7 +41,7 @@ func (e *Event) SetTags(t string) {
 }
 
 // Decode event
-func (e *Event) decode(data []byte) (err error) {
+func (e *Event) unmarshal(data []byte) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = ErrDecodeError
@@ -53,7 +53,7 @@ func (e *Event) decode(data []byte) (err error) {
 }
 
 // decode event ts - legacy
-func decodeEventTS2(data []byte) (int64, error) {
+func unmarshalTSlegacy(data []byte) (int64, error) {
 	var ts int64
 	buf := bytes.NewReader(data[:8])
 	err := binary.Read(buf, binary.BigEndian, &ts)
@@ -61,7 +61,7 @@ func decodeEventTS2(data []byte) (int64, error) {
 }
 
 // decode event ts
-func decodeEventTS(data []byte) (int64, error) {
+func unmarshalTS(data []byte) (int64, error) {
 	if len(data) < 8 {
 		return 0, ErrDecodeError
 	}
@@ -77,8 +77,8 @@ func decodeEventTS(data []byte) (int64, error) {
 	return ts, nil
 }
 
-// encode event ts
-func encodeEventTS(ts int64, data []byte) ([]byte, error) {
+// marshal event ts
+func marshalTS(ts int64, data []byte) ([]byte, error) {
 	buf := make([]byte, 8)
 	buf[0] = byte((ts >> 56) & 0xff)
 	buf[1] = byte((ts >> 48) & 0xff)
@@ -100,8 +100,8 @@ func encodeEventTS(ts int64, data []byte) ([]byte, error) {
 	return buf, nil
 }
 
-// encode event - legacy
-func encodeEventTS2(ts int64, data []byte) ([]byte, error) {
+// marshal event - legacy
+func marshalTSlegacy(ts int64, data []byte) ([]byte, error) {
 	key := new(bytes.Buffer)
 	if err := binary.Write(key, binary.BigEndian, ts); err != nil {
 		return nil, err
@@ -119,14 +119,14 @@ func encodeEventTS2(ts int64, data []byte) ([]byte, error) {
 }
 
 // encode (marshal) Event
-func (e *Event) encode() ([]byte, []byte, error) {
+func (e *Event) marshal() ([]byte, []byte, error) {
 	// KEY: ts(int64)crc(4) (12bytes)
 	buf, err := e.Marshal(nil)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	key, err := encodeEventTS(e.Time, buf)
+	key, err := marshalTS(e.Time, buf)
 
 	if err == nil {
 		// prefix by version
@@ -176,7 +176,7 @@ func (db *DB) SaveEvent(e *Event) error {
 		}
 
 		b.FillPercent = 0.99
-		data, key, err := e.encode()
+		data, key, err := e.marshal()
 		if err == nil {
 			return b.Put(key, data)
 		}
@@ -186,9 +186,9 @@ func (db *DB) SaveEvent(e *Event) error {
 }
 
 func getEventsFromBucket(f, t int64, b *bolt.Bucket, bname []byte) []*Event {
-	fkey, err := encodeEventTS(f, nil)
+	fkey, err := marshalTS(f, nil)
 	if err != nil {
-		log.Errorf("ERROR: encodeEventTS for %v error: %s", t, err)
+		log.Errorf("ERROR: marshalTS for %v error: %s", t, err)
 		fkey = []byte{0}
 	}
 
@@ -196,7 +196,7 @@ func getEventsFromBucket(f, t int64, b *bolt.Bucket, bname []byte) []*Event {
 	var events []*Event
 
 	for k, v := c.Seek(fkey); k != nil; k, v = c.Next() {
-		if ts, err := decodeEventTS(k); err != nil {
+		if ts, err := unmarshalTS(k); err != nil {
 			log.Errorf("ERROR: decode event ts error: %s", err.Error())
 		} else if ts >= f && ts <= t {
 			var err error
@@ -207,7 +207,7 @@ func getEventsFromBucket(f, t int64, b *bolt.Bucket, bname []byte) []*Event {
 			} else {
 				switch v[0] {
 				case 1:
-					err = e.decode(v)
+					err = e.unmarshal(v)
 				default:
 					err = fmt.Errorf("invalid version: %v", v[0])
 				}
@@ -263,9 +263,9 @@ func (db *DB) GetEvents(from, to time.Time, name string) ([]*Event, error) {
 }
 
 func getEventsKeyFromBucket(f, t int64, b *bolt.Bucket) [][]byte {
-	fkey, err := encodeEventTS(f, nil)
+	fkey, err := marshalTS(f, nil)
 	if err != nil {
-		log.Errorf("ERROR: encodeEventTS for %v error: %s", t, err)
+		log.Errorf("ERROR: marshalTS for %v error: %s", t, err)
 		fkey = []byte{0}
 	}
 
@@ -273,7 +273,7 @@ func getEventsKeyFromBucket(f, t int64, b *bolt.Bucket) [][]byte {
 	var keys [][]byte
 
 	for k, _ := c.Seek(fkey); k != nil; k, _ = c.Next() {
-		if ts, err := decodeEventTS(k); err != nil {
+		if ts, err := unmarshalTS(k); err != nil {
 			log.Errorf("ERROR: decode event error: %v", err)
 		} else if ts >= f && ts <= t {
 			keys = append(keys, k)

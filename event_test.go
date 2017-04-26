@@ -29,11 +29,11 @@ func generateEvents() []*Event {
 	return e
 }
 
-func marshalEvents() [][]byte {
+func prepareTestEvents() [][]byte {
 	m := make([][]byte, 1000, 1000)
 	var err error
 	for i, e := range generateEvents() {
-		m[i], _, err = e.encode()
+		m[i], _, err = e.marshal()
 		if err != nil {
 			log.Fatalf("marshalGOBEvents error: %s", err)
 		}
@@ -41,10 +41,10 @@ func marshalEvents() [][]byte {
 	return m
 }
 
-func marshalTS() [][]byte {
+func prepareTestTS() [][]byte {
 	m := make([][]byte, 1000, 1000)
 	for i := int64(0); i < 1000; i++ {
-		m[i], _ = encodeEventTS((i*100)<<10, nil)
+		m[i], _ = marshalTS((i*100)<<10, nil)
 	}
 	return m
 }
@@ -56,7 +56,7 @@ func BenchmarkMarshal(b *testing.B) {
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		e := data[i%1000]
-		if _, _, err := e.encode(); err != nil {
+		if _, _, err := e.marshal(); err != nil {
 			b.Fatalf("marshal error: %s", err.Error())
 		}
 	}
@@ -64,66 +64,66 @@ func BenchmarkMarshal(b *testing.B) {
 
 func BenchmarkUnmarshal(b *testing.B) {
 	b.StopTimer()
-	data := marshalEvents()
+	data := prepareTestEvents()
 	b.ReportAllocs()
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		m := data[i%1000]
 		e := &Event{}
-		if err := e.decode(m); err != nil {
+		if err := e.unmarshal(m); err != nil {
 			b.Fatalf("unmarshal error: %s", err.Error())
 		}
 	}
 }
 
-func BenchmarkEncodeEventTS(b *testing.B) {
+func BenchmarkMarshallTS(b *testing.B) {
 	b.StopTimer()
 	data := generateEvents()
 	b.ReportAllocs()
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		e := data[i%1000]
-		if _, err := encodeEventTS(e.Time, nil); err != nil {
+		if _, err := marshalTS(e.Time, nil); err != nil {
 			b.Fatalf("marshal error: %s", err.Error())
 		}
 	}
 }
 
-func BenchmarkEncodeEventTS2(b *testing.B) {
+func BenchmarkMashalTSlegacy(b *testing.B) {
 	b.StopTimer()
 	data := generateEvents()
 	b.ReportAllocs()
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		e := data[i%1000]
-		if _, err := encodeEventTS2(e.Time, nil); err != nil {
+		if _, err := marshalTSlegacy(e.Time, nil); err != nil {
 			b.Fatalf("marshal error: %s", err.Error())
 		}
 	}
 }
 
-func BenchmarkDecodeEventTS(b *testing.B) {
+func BenchmarkUnmarshalTS(b *testing.B) {
 	b.StopTimer()
-	data := marshalTS()
+	data := prepareTestTS()
 	b.ReportAllocs()
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		e := data[i%1000]
-		if _, err := decodeEventTS(e); err != nil {
-			b.Fatalf("decodeEventTS error: %s", err.Error())
+		if _, err := unmarshalTS(e); err != nil {
+			b.Fatalf(" unmarshalTSerror: %s", err.Error())
 		}
 	}
 }
 
-func BenchmarkDecodeEventTS2(b *testing.B) {
+func BenchmarkUnmarshalTSlegacy(b *testing.B) {
 	b.StopTimer()
-	data := marshalTS()
+	data := prepareTestTS()
 	b.ReportAllocs()
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		e := data[i%1000]
-		if _, err := decodeEventTS2(e); err != nil {
-			b.Fatalf("decodeEventTS2 error: %s", err.Error())
+		if _, err := unmarshalTSlegacy(e); err != nil {
+			b.Fatalf("unmarshalTSlegacy error: %s", err.Error())
 		}
 	}
 }
@@ -158,13 +158,13 @@ func TestMarshal(t *testing.T) {
 		}
 		e.SetTags(randomStr(50))
 
-		data, _, err := e.encode()
+		data, _, err := e.marshal()
 		if err != nil {
-			t.Fatalf("encode error: %s (%+v)", err, e)
+			t.Fatalf("marshal error: %s (%+v)", err, e)
 		}
 
 		e2 := &Event{}
-		err = e2.decode(data)
+		err = e2.unmarshal(data)
 		if err != nil {
 			t.Fatalf("decode error: %s (%+v)", err, e)
 		}
@@ -216,100 +216,100 @@ func TestCheckTags(t *testing.T) {
 	}
 }
 
-func TestEncodeEventTS1(t *testing.T) {
-	ts1, err := encodeEventTS(10, nil)
+func TestMarshalTS(t *testing.T) {
+	ts1, err := marshalTS(10, nil)
 	if err != nil {
-		t.Fatalf("encodeEventTS error: %s", err)
+		t.Fatalf("marshalTS error: %s", err)
 	}
-	ts2, err := encodeEventTS(11, nil)
+	ts2, err := marshalTS(11, nil)
 	if err != nil {
-		t.Fatalf("encodeEventTS error: %s", err)
+		t.Fatalf("marshalTS error: %s", err)
 	}
-	ts3, err := encodeEventTS(10<<3, nil)
+	ts3, err := marshalTS(10<<3, nil)
 	if err != nil {
-		t.Fatalf("encodeEventTS error: %s", err)
+		t.Fatalf("marshalTS error: %s", err)
 	}
-	ts4, err := encodeEventTS(10<<3+1, nil)
+	ts4, err := marshalTS(10<<3+1, nil)
 	if err != nil {
-		t.Fatalf("encodeEventTS error: %s", err)
+		t.Fatalf("marshalTS error: %s", err)
 	}
-	ts5, err := encodeEventTS(time.Now().Unix()-10, nil)
+	ts5, err := marshalTS(time.Now().Unix()-10, nil)
 	if err != nil {
-		t.Fatalf("encodeEventTS error: %s", err)
+		t.Fatalf("marshalTS error: %s", err)
 	}
-	ts6, err := encodeEventTS(time.Now().Unix()+10, nil)
+	ts6, err := marshalTS(time.Now().Unix()+10, nil)
 	if err != nil {
-		t.Fatalf("encodeEventTS error: %s", err)
+		t.Fatalf("marshalTS error: %s", err)
 	}
 
 	if r := bytes.Compare(ts1, ts2); r >= 0 {
-		t.Fatalf("encodeEventTS failed compare ts1, ts2: %d", r)
+		t.Fatalf("marshalTS failed compare ts1, ts2: %d", r)
 	}
 	if r := bytes.Compare(ts2, ts3); r >= 0 {
-		t.Fatalf("encodeEventTS failed compare ts2, ts3: %d", r)
+		t.Fatalf("marshalTS failed compare ts2, ts3: %d", r)
 	}
 	if r := bytes.Compare(ts3, ts4); r >= 0 {
-		t.Fatalf("encodeEventTS failed compare ts3, ts4: %d", r)
+		t.Fatalf("marshalTS failed compare ts3, ts4: %d", r)
 	}
 	if r := bytes.Compare(ts4, ts5); r >= 0 {
-		t.Fatalf("encodeEventTS failed compare ts4, ts5: %d", r)
+		t.Fatalf("marshalTS failed compare ts4, ts5: %d", r)
 	}
 	if r := bytes.Compare(ts5, ts6); r >= 0 {
-		t.Fatalf("encodeEventTS failed compare ts5, ts6: %d", r)
+		t.Fatalf("marshalTS failed compare ts5, ts6: %d", r)
 	}
 	if r := bytes.Compare(ts1, ts6); r >= 0 {
-		t.Fatalf("encodeEventTS failed compare ts1, ts6: %d", r)
+		t.Fatalf("marshalTS failed compare ts1, ts6: %d", r)
 	}
 }
 
-func TestEncodeEventTS2(t *testing.T) {
-	ts1, err := encodeEventTS(10, []byte(randomStr(100)))
+func TestMarshalTSlegacy(t *testing.T) {
+	ts1, err := marshalTSlegacy(10, []byte(randomStr(100)))
 	if err != nil {
-		t.Fatalf("encodeEventTS error: %s", err)
+		t.Fatalf("marshalTS error: %s", err)
 	}
-	ts2, err := encodeEventTS(11, []byte(randomStr(100)))
+	ts2, err := marshalTSlegacy(11, []byte(randomStr(100)))
 	if err != nil {
-		t.Fatalf("encodeEventTS error: %s", err)
+		t.Fatalf("marshalTS error: %s", err)
 	}
-	ts3, err := encodeEventTS(10<<3, []byte(randomStr(100)))
+	ts3, err := marshalTSlegacy(10<<3, []byte(randomStr(100)))
 	if err != nil {
-		t.Fatalf("encodeEventTS error: %s", err)
+		t.Fatalf("marshalTS error: %s", err)
 	}
 
 	if r := bytes.Compare(ts1, ts2); r >= 0 {
-		t.Fatalf("encodeEventTS failed compare ts1, ts2: %d", r)
+		t.Fatalf("marshalTS failed compare ts1, ts2: %d", r)
 	}
 	if r := bytes.Compare(ts2, ts3); r >= 0 {
-		t.Fatalf("encodeEventTS failed compare ts2, ts3: %d", r)
+		t.Fatalf("marshalTS failed compare ts2, ts3: %d", r)
 	}
 	if r := bytes.Compare(ts1, ts3); r >= 0 {
-		t.Fatalf("encodeEventTS failed compare ts3, ts4: %d", r)
+		t.Fatalf("marshalTS failed compare ts3, ts4: %d", r)
 	}
 }
 
-func TestEncodeEventCompare(t *testing.T) {
+func TestMarshalEventCompare(t *testing.T) {
 	for i := uint(0); i < 56; i++ {
 		for j := uint(1); j < 8; j++ {
 			tsin := int64(j << i)
-			ts1, _ := encodeEventTS(tsin, nil)
-			ts2, _ := encodeEventTS(tsin, nil)
+			ts1, _ := marshalTS(tsin, nil)
+			ts2, _ := marshalTS(tsin, nil)
 			if bytes.Compare(ts1, ts2) != 0 {
-				t.Fatalf("encodeEventTS wrong values: %v != %v", ts1, ts2)
+				t.Fatalf("marshalTS wrong values: %v != %v", ts1, ts2)
 			}
 		}
 	}
 }
 
-func TestEncodeDecodeTS2(t *testing.T) {
+func TestMarshalUnmarshalTS(t *testing.T) {
 	for i := uint(0); i < 56; i++ {
 		for j := uint(1); j < 8; j++ {
 			tsin := int64(j << i)
-			ts, _ := encodeEventTS(tsin, nil)
-			tdec, _ := decodeEventTS2(ts)
+			ts, _ := marshalTS(tsin, nil)
+			tdec, _ := unmarshalTSlegacy(ts)
 			if tsin != tdec {
 				t.Fatalf("decode error: for %d << %d: %v != %v (%v)", i, j, tdec, tsin, ts)
 			}
-			tdec2, _ := decodeEventTS(ts)
+			tdec2, _ := unmarshalTS(ts)
 			if tsin != tdec2 {
 				t.Fatalf("decode 2 error: for %d << %d: %v != %v (%v)", i, j, tdec2, tsin, ts)
 			}
