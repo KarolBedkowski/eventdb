@@ -31,6 +31,7 @@ func (c *Configuration) validate() error {
 	return nil
 }
 
+// LoadConfiguration from `filename`
 func LoadConfiguration(filename string) (*Configuration, error) {
 	c := &Configuration{}
 	b, err := ioutil.ReadFile(filename)

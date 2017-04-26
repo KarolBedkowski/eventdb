@@ -66,7 +66,10 @@ func (e *eventsHandler) onPost(w http.ResponseWriter, r *http.Request, l log.Log
 		Name:  ev.Name,
 		Title: ev.Title,
 		Text:  ev.Text,
-		Tags:  ev.Tags,
+	}
+
+	if ev.Tags != "" {
+		event.SetTags(ev.Tags)
 	}
 
 	switch ev.Time.(type) {
@@ -96,15 +99,14 @@ func (e *eventsHandler) onPost(w http.ResponseWriter, r *http.Request, l log.Log
 		}
 	}
 
-	if err := e.DB.SaveEvent(event); err == nil {
-		eventsAdded.WithLabelValues("api-v1-event-post").Inc()
-		return http.StatusCreated, "ok"
-	} else {
+	if err := e.DB.SaveEvent(event); err != nil {
 		log.Errorf("save event error: %s", err.Error())
+		eventAddError.Inc()
+		return http.StatusInternalServerError, "error"
 	}
 
-	eventAddError.Inc()
-	return http.StatusInternalServerError, "error"
+	eventsAdded.WithLabelValues("api-v1-event-post").Inc()
+	return http.StatusCreated, "ok"
 }
 
 type eventsOnGetRespHeader struct {
@@ -274,9 +276,6 @@ func (h humanEventsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		ts := time.Unix(0, e.Time)
 		w.Write([]byte(fmt.Sprintf("%d. %s   Name: %v\nTitle: %s\nText: %s\nTags: %s\n",
 			(i + 1), ts, e.Name, e.Title, e.Text, e.Tags)))
-		if h.Configuration.Debug {
-			w.Write([]byte(fmt.Sprintf("bucket: %s   key: %x\n", string(e.bucket), e.key)))
-		}
 		w.Write([]byte{'\n', '\n'})
 	}
 }
