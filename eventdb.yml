@@ -1,3 +1,7 @@
 database: eventdb.boltdb
 retention: 2160h
 debug: true
+
+annotations_conf:
+  returned_cols:
+    - "c1"

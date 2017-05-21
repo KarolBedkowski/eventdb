@@ -71,9 +71,11 @@ func main() {
 	})
 
 	apiHandler := eventsHandler{Configuration: c, DB: db}
-	http.Handle("/api/v1/event", prometheus.InstrumentHandler("api-v1-event", apiHandler))
+	http.Handle("/api/v2/event", prometheus.InstrumentHandler("api-v2-event", apiHandler))
+	apiBucketsHandler := bucketsHandler{Configuration: c, DB: db}
+	http.Handle("/api/v2/buckets", prometheus.InstrumentHandler("api-v2-buckets", apiBucketsHandler))
 
-	ah := AnnotationHandler{DB: db}
+	ah := AnnotationHandler{Configuration: c, DB: db}
 	http.Handle("/annotations", prometheus.InstrumentHandler("annotations", ah))
 
 	pwh := PromWebHookHandler{Configuration: c, DB: db}
@@ -98,7 +100,9 @@ func main() {
 				if newConf, err := LoadConfiguration(*configFile); err == nil {
 					log.Debugf("new configuration: %+v", newConf)
 					apiHandler.Configuration = newConf
+					apiBucketsHandler.Configuration = newConf
 					vw.Configuration = newConf
+					ah.Configuration = newConf
 					hh.Configuration = newConf
 					pwh.Configuration = newConf
 					log.Info("configuration reloaded")
@@ -163,11 +167,14 @@ func (v *vacuumWorker) Start() {
 			if v.Configuration.RetentionParsed != nil {
 				to := time.Now().Add(-(*v.Configuration.RetentionParsed))
 				from := time.Time{}
-				if deleted, err := v.DB.DeleteEvents(from, to, AnyBucket); err == nil {
-					log.Infof("vacuum deleted %d to %s", deleted, to)
-					deletedCntr.Add(float64(deleted))
-				} else {
-					log.Errorf("vacuum delete error: %s", err.Error())
+				buckets, _ := v.DB.Buckets()
+				for _, bucket := range buckets {
+					if deleted, err := v.DB.DeleteEvents(bucket, from, to, nil); err == nil {
+						log.Infof("vacuum deleted %d to %s", deleted, to)
+						deletedCntr.Add(float64(deleted))
+					} else {
+						log.Errorf("vacuum delete error: %s", err.Error())
+					}
 				}
 				lastRun.SetToCurrentTime()
 			}

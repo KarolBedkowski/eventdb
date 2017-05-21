@@ -14,11 +14,22 @@ import (
 )
 
 type (
+	PromWebHookConf struct {
+		MappedLabels []string `yaml:"mapped_labels"`
+	}
+
+	AnnotationsConf struct {
+		ReturnedCols []string `yaml:"returned_cols"`
+	}
+
 	// Configuration keep application configuration
 	Configuration struct {
 		DBFile    string `yaml:"dbfile"`
 		Retention string `yaml:"retention"`
 		Debug     bool   `yaml:"debug"`
+
+		PromWebHookConf *PromWebHookConf `yaml:"promwebhool_conf"`
+		AnnotationsConf *AnnotationsConf `yaml:"annotations_conf"`
 
 		RetentionParsed *time.Duration `yaml:"-"`
 	}

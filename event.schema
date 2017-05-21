@@ -1,8 +1,13 @@
+struct EventCol {
+	Name	string
+	Value	string
+}
 
 struct Event {
-	Name  string
-	Title string
-	Time  int64
-	Text  string
-	Tags  []string
+	Name		string
+	Time		int64
+	Summary		string
+	Description	string
+	Cols		[]EventCol
+	Tags		[]string
 }
