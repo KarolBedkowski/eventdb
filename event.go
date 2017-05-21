@@ -48,6 +48,10 @@ func (e *Event) ColumnValue(col string) (v string, ok bool) {
 	return
 }
 
+func (e *Event) TS() time.Time {
+	return time.Unix(0, e.Time)
+}
+
 // Decode event
 func (e *Event) unmarshal(data []byte) (err error) {
 	defer func() {

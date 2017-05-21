@@ -9,7 +9,7 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
+	"html/template"
 	"net/http"
 	"strings"
 	"time"
@@ -249,6 +249,8 @@ type humanEventsHandler struct {
 	DB            *DB
 }
 
+const defaultTSFormat = "2006-01-02 15:04:05"
+
 func (h humanEventsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	l := log.With("remote", r.RemoteAddr).
 		With("req", r.RequestURI).
@@ -257,14 +259,43 @@ func (h humanEventsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	vars := r.Form
 
-	to := time.Now()
-	from := to.Add(time.Duration(-2) * time.Hour)
+	var toT, fromT time.Time
+	var err error
+
+	to := vars.Get("to")
+	if to == "" {
+		toT = time.Now()
+		to = toT.Format(defaultTSFormat)
+	} else {
+		toT, err = parseTime(to)
+		if err != nil {
+			l.Errorf("parse to error: %s", err.Error())
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("bad to to date"))
+			return
+		}
+	}
+
+	from := vars.Get("from")
+	if from == "" {
+		fromT = toT.Add(time.Duration(-1) * time.Hour)
+		from = fromT.Format(defaultTSFormat)
+	} else {
+		fromT, err = parseTime(from)
+		if err != nil {
+			l.Errorf("parse from error: %s", err.Error())
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("bad to from date"))
+			return
+		}
+	}
 
 	query := vars.Get("query")
 	if query == "" {
 		buckets, _ := h.DB.Buckets()
 		query = strings.Join(buckets, ";")
 	}
+
 	q, err := ParseQuery(query)
 	if err != nil {
 		l.Infof("parse query error: %s", err.Error())
@@ -272,7 +303,7 @@ func (h humanEventsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	events, err := q.Execute(h.DB, from, to)
+	events, err := q.Execute(h.DB, fromT, toT)
 	if err != nil {
 		l.Errorf("get events error: %s", err.Error())
 		w.WriteHeader(http.StatusInternalServerError)
@@ -281,20 +312,26 @@ func (h humanEventsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	SortEventsByTime(events)
 
-	w.WriteHeader(http.StatusOK)
-	w.Header().Set("Content-Type", "text/plain; charset=UTF-8")
-	w.Write([]byte(fmt.Sprintf("Events for %s from %s to %s\n\n", query, from, to)))
-
-	for i, e := range events {
-		ts := time.Unix(0, e.Time)
-		var cols []string
-		for _, c := range e.Cols {
-			cols = append(cols, c.Name+": "+c.Value)
-		}
-		w.Write([]byte(fmt.Sprintf("%d. %s   Name: %v\nTitle: %s\nText: %s\nTags: %s\nCols: %s\n",
-			(i + 1), ts, e.Name, e.Summary, e.Description, e.Tags, strings.Join(cols, "; "))))
-		w.Write([]byte{'\n', '\n'})
+	t, err := template.New("webpage").Parse(tpl)
+	if err != nil {
+		l.Errorf("template parse error: %s", err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
+
+	data := &struct {
+		Events []*Event
+		Query  string
+		From   string
+		To     string
+	}{
+		Events: events,
+		Query:  query,
+		From:   from,
+		To:     to,
+	}
+
+	err = t.Execute(w, data)
 }
 
 type bucketsHandler struct {
@@ -333,3 +370,48 @@ func (b bucketsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 }
+
+const tpl = `
+<!DOCTYPE HTML>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>EventDB</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<style type="text/css">body{margin:20px auto;max-width:1050px;line-height:1.6;font-size:12px;color:#444;padding:0 10px}h1,h2,h3{line-height:1.2}</style>
+</head>
+<body>
+	<h1>EventDB</h1>
+	<h2>Query</h2>
+	<form>
+		<label for="query">Query</label><br/>
+		<textarea id="query" name="query" cols="80" rows="5">{{ .Query }}</textarea><br/>
+		<label for="from">From:</label><br/>
+		<input id="from" name="from" value="{{ .From }}" /></br>
+		<label for="to">To:</label><br/>
+		<input id="to" name="to" value="{{ .To }}" /></br>
+		<button type="submit">Send</button>
+	</form>
+	<br/>
+	<table border="1" cellspacing="0">
+	<thead>
+		<tr>
+			<th>Name</th><th>TS</th><th>Summary</th><th>Description</th><th>Cols</th><th>Tags</th>
+		</tr>
+	</thead>
+		{{range .Events}}
+		<tr>
+			<td>{{ .Name }}</td>
+			<td>{{ .TS }}</td>
+			<td>{{ .Summary  }}</td>
+			<td>{{ .Description  }}</td>
+			<td>{{ .Cols  }}</td>
+			<td>{{ .Tags  }}</td>
+		</tr>
+		{{else}}
+		<tr>
+			<td colspan="6">No result</td>
+		</tr>
+		{{end}}
+	</body>
+</html>`
