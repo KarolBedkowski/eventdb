@@ -8,6 +8,7 @@
 package main
 
 import (
+	"fmt"
 	"html/template"
 	"net/http"
 	"strings"
@@ -21,6 +22,17 @@ type queryPageHandler struct {
 	DB            *DB
 }
 
+type queryPageData struct {
+	Events []*Event
+	Query  string
+	From   string
+	To     string
+	Error  string
+
+	toT   time.Time
+	fromT time.Time
+}
+
 const defaultTSFormat = "2006-01-02 15:04:05 -0700"
 
 func (h queryPageHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -28,82 +40,86 @@ func (h queryPageHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		With("req", r.RequestURI).
 		With("action", "queryPageHandler.ServeHTTP")
 
+	t, terr := template.New("webpage").Parse(tpl)
+	if terr != nil {
+		l.Errorf("template parse error: %s", terr.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
 	r.ParseForm()
-	vars := r.Form
 
-	var toT, fromT time.Time
 	var err error
+	var data *queryPageData
 
-	to := vars.Get("to")
-	if to == "" {
-		toT = time.Now()
-		to = toT.Format(defaultTSFormat)
-	} else {
-		toT, err = parseTime(to)
-		if err != nil {
-			l.Errorf("parse to error: %s", err.Error())
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("bad to to date"))
-			return
-		}
+	data, err = h.parseInput(r)
+	if err == nil {
+		err = data.loadEvents(&h)
 	}
 
-	from := vars.Get("from")
-	if from == "" {
-		fromT = toT.Add(time.Duration(-1) * time.Hour)
-		from = fromT.Format(defaultTSFormat)
-	} else {
-		fromT, err = parseTime(from)
-		if err != nil {
-			l.Errorf("parse from error: %s", err.Error())
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("bad to from date"))
-			return
-		}
-	}
-
-	query := vars.Get("query")
-	if query == "" {
-		buckets, _ := h.DB.Buckets()
-		query = strings.Join(buckets, ";")
-	}
-
-	q, err := ParseQuery(query)
 	if err != nil {
-		l.Infof("parse query error: %s", err.Error())
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	events, err := q.Execute(h.DB, fromT, toT)
-	if err != nil {
-		l.Errorf("get events error: %s", err.Error())
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	SortEventsByTime(events)
-
-	t, err := template.New("webpage").Parse(tpl)
-	if err != nil {
-		l.Errorf("template parse error: %s", err.Error())
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	data := &struct {
-		Events []*Event
-		Query  string
-		From   string
-		To     string
-	}{
-		Events: events,
-		Query:  query,
-		From:   from,
-		To:     to,
+		l.Infof("parse & load data error: %s", err)
+		data.Error = err.Error()
 	}
 
 	err = t.Execute(w, data)
+	if err != nil {
+		l.Errorf("template execute error: %s", err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+}
+
+func (h *queryPageHandler) parseInput(r *http.Request) (data *queryPageData, err error) {
+	vars := r.Form
+
+	data = &queryPageData{
+		To:    vars.Get("to"),
+		From:  vars.Get("from"),
+		Query: vars.Get("query"),
+	}
+
+	if data.To == "" {
+		data.toT = time.Now()
+		data.To = data.toT.Format(defaultTSFormat)
+	} else {
+		data.toT, err = parseTime(data.To)
+		if err != nil {
+			return data, fmt.Errorf("parse TO error: %s", err)
+		}
+	}
+
+	if data.From == "" {
+		data.fromT = data.toT.Add(time.Duration(-1) * time.Hour)
+		data.From = data.fromT.Format(defaultTSFormat)
+	} else {
+		data.fromT, err = parseTime(data.From)
+		if err != nil {
+			return data, fmt.Errorf("parse FROM error: %s", err)
+		}
+	}
+
+	if data.Query == "" {
+		buckets, _ := h.DB.Buckets()
+		data.Query = strings.Join(buckets, ";")
+	}
+
+	return
+}
+
+func (d *queryPageData) loadEvents(h *queryPageHandler) (err error) {
+	var q *Query
+	q, err = ParseQuery(d.Query)
+	if err != nil {
+		return fmt.Errorf("parse query error: %s", err)
+	}
+
+	d.Events, err = q.Execute(h.DB, d.fromT, d.toT)
+	if err != nil {
+		return fmt.Errorf("get events error: %s", err)
+	}
+
+	SortEventsByTime(d.Events)
+	return
 }
 
 const tpl = `
