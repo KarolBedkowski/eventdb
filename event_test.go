@@ -19,11 +19,11 @@ func generateEvents() []*Event {
 	e := make([]*Event, 0, 100)
 	for i := 0; i < 1000; i++ {
 		e = append(e, &Event{
-			Name:  "aaa",
-			Title: "bbbbbbbbbbbbbbbb",
-			Time:  int64(i),
-			Text:  "ccccccccccccccccccccccccccccccccccccccccc",
-			Tags:  []string{"10230", "9103", "90139", "01930"},
+			Name:        "aaa",
+			Summary:     "bbbbbbbbbbbbbbbb",
+			Time:        int64(i),
+			Description: "ccccccccccccccccccccccccccccccccccccccccc",
+			Tags:        []string{"10230", "9103", "90139", "01930"},
 		})
 	}
 	return e
@@ -106,13 +106,13 @@ func eventsCompare(e, e2 *Event, t *testing.T) {
 	if e.Name != e2.Name {
 		t.Fatalf("name not match: %+v vs %+v", e, e2)
 	}
-	if e.Title != e2.Title {
+	if e.Summary != e2.Summary {
 		t.Fatalf("title not match: %+v vs %+v", e, e2)
 	}
 	if e.Time != e2.Time {
 		t.Fatalf("time not match: %+v vs %+v", e, e2)
 	}
-	if e.Text != e2.Text {
+	if e.Description != e2.Description {
 		t.Fatalf("text not match: %+v vs %+v", e, e2)
 	}
 	for i, tag := range e.Tags {
@@ -125,10 +125,10 @@ func eventsCompare(e, e2 *Event, t *testing.T) {
 func TestMarshal(t *testing.T) {
 	for i := 0; i < 1000; i++ {
 		e := &Event{
-			Name:  randomStr(0),
-			Title: randomStr(0),
-			Time:  int64(i),
-			Text:  randomStr(0),
+			Name:        randomStr(0),
+			Summary:     randomStr(0),
+			Time:        int64(i),
+			Description: randomStr(0),
 		}
 		e.SetTags(randomStr(50))
 
