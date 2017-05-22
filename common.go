@@ -44,7 +44,7 @@ func parseTime(t string) (time.Time, error) {
 	if ts, err := time.Parse("2006-01-02T15:04:05", t); err == nil {
 		return ts, nil
 	}
-	if ts, err := time.Parse("2006-01-02 15:04:05", t); err == nil {
+	if ts, err := time.Parse("2006-01-02 15:04:05 -0700", t); err == nil {
 		return ts, nil
 	}
 	if ts, err := time.Parse("2006-01-02 15:04:05", t); err == nil {
