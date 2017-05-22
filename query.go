@@ -21,7 +21,7 @@ type conditionTag struct {
 	tag string
 }
 
-func (c *conditionTag) match(e *Event) bool {
+func (c conditionTag) match(e *Event) bool {
 	for _, t := range e.Tags {
 		if t == c.tag {
 			return true
@@ -30,7 +30,7 @@ func (c *conditionTag) match(e *Event) bool {
 	return false
 }
 
-func (c *conditionTag) String() string {
+func (c conditionTag) String() string {
 	return fmt.Sprintf("{conditionTag: %s}", c.tag)
 }
 
@@ -39,7 +39,7 @@ type conditionCol struct {
 	val string
 }
 
-func (c *conditionCol) match(e *Event) bool {
+func (c conditionCol) match(e *Event) bool {
 	for _, o := range e.Cols {
 		if o.Name == c.col {
 			return o.Value == c.val
@@ -48,18 +48,18 @@ func (c *conditionCol) match(e *Event) bool {
 	return false
 }
 
-func (c *conditionCol) String() string {
+func (c conditionCol) String() string {
 	return fmt.Sprintf("{conditionCol: %s=%s}", c.col, c.val)
 }
 
 type conditionMatchAll struct {
 }
 
-func (c *conditionMatchAll) match(e *Event) bool {
+func (c conditionMatchAll) match(e *Event) bool {
 	return true
 }
 
-func (c *conditionMatchAll) String() string {
+func (c conditionMatchAll) String() string {
 	return "{conditionMatchAll}"
 }
 
@@ -79,6 +79,10 @@ o:
 		return true
 	}
 	return false
+}
+
+func (s *subquery) String() string {
+	return fmt.Sprintf("subquery{bucket=%v, cons=%v}", s.bucket, s.conds)
 }
 
 type Query struct {
@@ -113,7 +117,7 @@ func ParseQuery(query string) (q *Query, err error) {
 				k := strings.TrimSpace(kv[0])
 				v := strings.TrimSpace(kv[1])
 				switch k {
-				case "tags":
+				case "_tag":
 					conds = append(conds, &conditionTag{tag: v})
 				default:
 					conds = append(conds, &conditionCol{col: k, val: v})
@@ -168,4 +172,8 @@ func (q *Query) ExecuteDelete(db *DB, from, to time.Time) (deleted int, err erro
 		deleted += d
 	}
 	return
+}
+
+func (q *Query) String() string {
+	return fmt.Sprintf("Query{RawQuery='%v', queries=%s}", q.RawQuery, q.queries)
 }
