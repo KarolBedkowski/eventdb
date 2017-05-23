@@ -51,7 +51,7 @@ func main() {
 		log.Fatalf("Error parsing config file: %s", err)
 	}
 
-	db, err := DBOpen(c.DBFile)
+	db, err := DBOpen(c)
 	if err != nil {
 		panic(err)
 	}

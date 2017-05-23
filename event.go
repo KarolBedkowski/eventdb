@@ -14,13 +14,8 @@ import (
 	"time"
 )
 
-var defaultBucket = []byte("__default__")
-
 // ErrDecodeError when unmarshaling data
 var ErrDecodeError = errors.New("decode error")
-
-// AnyBucket means select all buckets
-const AnyBucket = "_any_"
 
 func init() {
 }
@@ -125,12 +120,7 @@ func (e *Event) marshal() ([]byte, []byte, error) {
 // SaveEvent to database
 func (db *DB) SaveEvent(e *Event) error {
 	return db.db.Update(func(tx *bolt.Tx) error {
-		name := defaultBucket
-		if e.Name != "" {
-			name = []byte(e.Name)
-		}
-
-		b, err := tx.CreateBucketIfNotExists(name)
+		b, err := tx.CreateBucketIfNotExists([]byte(e.Name))
 		if err != nil {
 			return err
 		}

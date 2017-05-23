@@ -31,6 +31,8 @@ type (
 		PromWebHookConf *PromWebHookConf `yaml:"promwebhool_conf"`
 		AnnotationsConf *AnnotationsConf `yaml:"annotations_conf"`
 
+		DefaultBucket string `yaml:"default_bucket"`
+
 		RetentionParsed *time.Duration `yaml:"-"`
 	}
 )
@@ -38,6 +40,9 @@ type (
 func (c *Configuration) validate() error {
 	if c.DBFile == "" {
 		c.DBFile = "eventdb.boltdb"
+	}
+	if c.DefaultBucket == "" {
+		c.DefaultBucket = "__default__"
 	}
 	return nil
 }

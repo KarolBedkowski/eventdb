@@ -133,6 +133,11 @@ func (p *PromWebHookHandler) onPost(w http.ResponseWriter, r *http.Request, l lo
 				e.Cols = append(e.Cols, EventCol{k, v})
 			}
 		}
+
+		if e.Name == "" {
+			e.Name = p.Configuration.DefaultBucket
+		}
+
 		if err := p.DB.SaveEvent(e); err != nil {
 			l.Errorf("save event error: %s", err)
 			eventAddError.Inc()

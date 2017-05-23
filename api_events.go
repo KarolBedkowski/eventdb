@@ -75,6 +75,9 @@ func (e *eventsHandler) onPost(w http.ResponseWriter, r *http.Request, l log.Log
 	if ev.Tags != "" {
 		event.SetTags(ev.Tags)
 	}
+	if event.Name == "" {
+		event.Name = e.Configuration.DefaultBucket
+	}
 
 	switch ev.Time.(type) {
 	case int64:
@@ -278,4 +281,3 @@ func (b bucketsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 }
-
