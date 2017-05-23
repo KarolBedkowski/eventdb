@@ -68,6 +68,18 @@ func (db *DB) Close() error {
 	return nil
 }
 
+// Buckets return list of all buckets in db
+func (db *DB) Buckets() (buckets []string, err error) {
+	err = db.db.View(func(tx *bolt.Tx) error {
+		return tx.ForEach(func(name []byte, b *bolt.Bucket) error {
+			buckets = append(buckets, string(name))
+			return nil
+		})
+	})
+
+	return
+}
+
 // NewInternalsHandler create http handlers related to database
 func (db *DB) NewInternalsHandler() http.Handler {
 	mux := http.NewServeMux()

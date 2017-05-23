@@ -188,17 +188,6 @@ func (db *DB) DeleteEvents(bucket string, from, to time.Time, filter func(*Event
 	return
 }
 
-func (db *DB) Buckets() (buckets []string, err error) {
-	err = db.db.View(func(tx *bolt.Tx) error {
-		return tx.ForEach(func(name []byte, b *bolt.Bucket) error {
-			buckets = append(buckets, string(name))
-			return nil
-		})
-	})
-
-	return
-}
-
 func (db *DB) GetEvents(bucket string, from, to time.Time, filter func(*Event) bool) ([]*Event, error) {
 	log.Debugf("GetEvents %s %s - %s", bucket, from, to)
 
