@@ -134,6 +134,7 @@ const tpl = `
 <body>
 	<h1>EventDB</h1>
 	<h2>Query</h2>
+	{{ with .Error }}<p><strong>{{ . }}</strong></p>{{ end  }}
 	<form>
 		<label for="query">Query</label><br/>
 		<textarea id="query" name="query" cols="80" rows="5">{{ .Query }}</textarea><br/>

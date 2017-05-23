@@ -85,17 +85,22 @@ func (s *subquery) String() string {
 	return fmt.Sprintf("subquery{bucket=%v, cons=%v}", s.bucket, s.conds)
 }
 
+// Query execute selects & updates on database
 type Query struct {
 	RawQuery string
 
 	queries []*subquery
 }
 
+// ParseQuery parse query as string and return Query object or error
 func ParseQuery(query string) (q *Query, err error) {
 	log.Debugf("ParseQuery: '%v'", query)
 
 	// map bucket -> subquery
 	qpb := make(map[string]*subquery, 0)
+
+	// temporary map  query -> bool for removing doubled
+	loadedQuery := make(map[string]bool)
 
 	// subqueries
 	for _, sq := range strings.Split(query, ";") {
@@ -103,6 +108,11 @@ func ParseQuery(query string) (q *Query, err error) {
 		if sq == "" {
 			continue
 		}
+
+		if _, ok := loadedQuery[sq]; ok {
+			continue
+		}
+		loadedQuery[sq] = true
 
 		log.Debugf("parse: '%v'", sq)
 
@@ -152,6 +162,7 @@ func ParseQuery(query string) (q *Query, err error) {
 	return rq, nil
 }
 
+// Execute receive events from database according to query
 func (q *Query) Execute(db *DB, from, to time.Time) (result []*Event, err error) {
 	for _, s := range q.queries {
 		events, e := db.GetEvents(s.bucket, from, to, s.match)
@@ -163,6 +174,7 @@ func (q *Query) Execute(db *DB, from, to time.Time) (result []*Event, err error)
 	return result, nil
 }
 
+// ExecuteDelete delete events according to query
 func (q *Query) ExecuteDelete(db *DB, from, to time.Time) (deleted int, err error) {
 	for _, s := range q.queries {
 		d, e := db.DeleteEvents(s.bucket, from, to, s.match)

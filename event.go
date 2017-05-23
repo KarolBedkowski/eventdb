@@ -34,6 +34,7 @@ func (e *Event) SetTags(t string) {
 	e.Tags = tags
 }
 
+// ColumnValue get value for given column
 func (e *Event) ColumnValue(col string) (v string, ok bool) {
 	for _, c := range e.Cols {
 		if c.Name == col {
@@ -43,6 +44,7 @@ func (e *Event) ColumnValue(col string) (v string, ok bool) {
 	return
 }
 
+// TS return event time as time.Time
 func (e *Event) TS() time.Time {
 	return time.Unix(0, e.Time)
 }
@@ -125,7 +127,8 @@ func (db *DB) SaveEvent(e *Event) error {
 			return err
 		}
 
-		b.FillPercent = 0.99
+		b.FillPercent = 0.999
+
 		data, key, err := e.marshal()
 		if err == nil {
 			return b.Put(key, data)
@@ -145,6 +148,9 @@ func (db *DB) DeleteEvents(bucket string, from, to time.Time, filter func(*Event
 		if b == nil {
 			return fmt.Errorf("unknown bucket name: %v", bucket)
 		}
+
+		b.FillPercent = 0.999
+
 		{
 			fkey, err := marshalTS(f, nil)
 			if err != nil {
@@ -179,6 +185,7 @@ func (db *DB) DeleteEvents(bucket string, from, to time.Time, filter func(*Event
 					return err
 				}
 			}
+
 			deleted = len(keys)
 		}
 
@@ -246,8 +253,6 @@ func (db *DB) GetEvents(bucket string, from, to time.Time, filter func(*Event) b
 	return events, err
 }
 
-type Events []*Event
-
 type EventsByTime []*Event
 
 func (a EventsByTime) Len() int           { return len(a) }
@@ -256,4 +261,8 @@ func (a EventsByTime) Less(i, j int) bool { return a[i].Time < a[j].Time }
 
 func SortEventsByTime(events []*Event) {
 	sort.Sort(EventsByTime(events))
+}
+
+func (e EventCol) String() string {
+	return fmt.Sprintf("%s:%s", e.Name, e.Value)
 }
