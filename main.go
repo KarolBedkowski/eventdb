@@ -176,10 +176,10 @@ func (v *vacuumWorker) Start() {
 			buckets, _ := v.DB.Buckets()
 			for _, bucket := range buckets {
 				if deleted, err := v.DB.DeleteEvents(bucket, from, to, nil); err == nil {
-					log.Infof("vacuum deleted %d to %s", deleted, to)
+					log.Infof("vacuum deleted %d to %s from %s", deleted, to, bucket)
 					deletedCntr.Add(float64(deleted))
 				} else {
-					log.Errorf("vacuum delete error: %s", err.Error())
+					log.Errorf("vacuum delete from %s error: %s", bucket, err.Error())
 				}
 			}
 			lastRun.SetToCurrentTime()
