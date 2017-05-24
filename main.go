@@ -77,6 +77,8 @@ func main() {
 
 	ah := AnnotationHandler{Configuration: c, DB: db}
 	http.Handle("/annotations", prometheus.InstrumentHandler("annotations", ah))
+	sh := SearchHandler{Configuration: c, DB: db}
+	http.Handle("/search", prometheus.InstrumentHandler("search", sh))
 
 	pwh := PromWebHookHandler{Configuration: c, DB: db}
 	http.Handle("/api/v1/promwebhook", prometheus.InstrumentHandler("api-v1-promwebhook", pwh))
@@ -103,6 +105,7 @@ func main() {
 					apiBucketsHandler.Configuration = newConf
 					vw.Configuration = newConf
 					ah.Configuration = newConf
+					sh.Configuration = newConf
 					hh.Configuration = newConf
 					pwh.Configuration = newConf
 					log.Info("configuration reloaded")
