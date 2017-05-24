@@ -82,7 +82,7 @@ func main() {
 	http.Handle("/api/v1/promwebhook", prometheus.InstrumentHandler("api-v1-promwebhook", pwh))
 
 	hh := queryPageHandler{Configuration: c, DB: db}
-	http.Handle("/query", prometheus.InstrumentHandler("query", hh))
+	http.Handle("/hquery", prometheus.InstrumentHandler("hquery", hh))
 
 	http.Handle("/metrics", promhttp.Handler())
 
