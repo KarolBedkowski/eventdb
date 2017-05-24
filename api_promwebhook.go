@@ -91,23 +91,53 @@ func (p *PromWebHookHandler) onPost(w http.ResponseWriter, r *http.Request, l lo
 		}
 
 		if v, ok := a.Annotations["summary"]; ok {
-			e.Title = fmt.Sprintf("[%s] %s", a.Status, strings.TrimSpace(v))
+			e.Summary = fmt.Sprintf("[%s] %s", a.Status, strings.TrimSpace(v))
 		} else {
-			e.Title = fmt.Sprintf("[%s]", a.Status)
+			e.Summary = fmt.Sprintf("[%s]", a.Status)
 		}
+		// Text
 		if v, ok := a.Annotations["description"]; ok {
-			e.Text = strings.TrimSpace(v)
+			e.Description = strings.TrimSpace(v)
 		}
-		if e.Text == "" {
-			e.Text = a.Annotations.String()
+		if e.Summary == "" {
+			if e.Description != "" {
+				e.Summary = e.Description
+				e.Description = ""
+			} else {
+				e.Summary = a.Annotations.String()
+			}
 		}
-		e.Text += "\n\n" + a.Labels.String()
-		if v, ok := a.Labels["tags"]; ok {
-			e.SetTags(strings.TrimSpace(v))
+
+		// Cols
+		for k, v := range a.Labels {
+
+			if p.Configuration.PromWebHookConf != nil {
+				accepted := false
+				for _, ml := range p.Configuration.PromWebHookConf.MappedLabels {
+					if ml == k {
+						accepted = true
+						break
+					}
+				}
+				if !accepted {
+					continue
+				}
+			}
+
+			switch k {
+			case "tags":
+				e.SetTags(strings.TrimSpace(v))
+			case "name":
+				e.Name = strings.TrimSpace(v)
+			default:
+				e.Cols = append(e.Cols, EventCol{k, v})
+			}
 		}
-		if v, ok := a.Labels["name"]; ok {
-			e.Name = strings.TrimSpace(v)
+
+		if e.Name == "" {
+			e.Name = p.Configuration.DefaultBucket
 		}
+
 		if err := p.DB.SaveEvent(e); err != nil {
 			l.Errorf("save event error: %s", err)
 			eventAddError.Inc()

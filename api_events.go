@@ -1,6 +1,6 @@
 //
 // events.go
-// Copyright (C) 2017 Karol Będkowski
+// Copyright (C) Karol Będkowski, 2017
 //
 // Distributed under terms of the GPLv3 license.
 //
@@ -9,7 +9,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -45,11 +44,12 @@ type (
 	}
 
 	eventReq struct {
-		Name  string
-		Title string
-		Time  interface{}
-		Text  string
-		Tags  string
+		Name        string
+		Summary     string
+		Time        interface{}
+		Description string
+		Tags        string
+		Labels      map[string]string
 	}
 )
 
@@ -63,13 +63,20 @@ func (e *eventsHandler) onPost(w http.ResponseWriter, r *http.Request, l log.Log
 	}
 
 	event := &Event{
-		Name:  ev.Name,
-		Title: ev.Title,
-		Text:  ev.Text,
+		Name:        ev.Name,
+		Summary:     ev.Summary,
+		Description: ev.Description,
+	}
+
+	for k, v := range ev.Labels {
+		event.Cols = append(event.Cols, EventCol{k, v})
 	}
 
 	if ev.Tags != "" {
 		event.SetTags(ev.Tags)
+	}
+	if event.Name == "" {
+		event.Name = e.Configuration.DefaultBucket
 	}
 
 	switch ev.Time.(type) {
@@ -110,10 +117,9 @@ func (e *eventsHandler) onPost(w http.ResponseWriter, r *http.Request, l log.Log
 }
 
 type eventsOnGetRespHeader struct {
-	From time.Time
-	To   time.Time
-	Name string
-	Tags []string
+	From  time.Time
+	To    time.Time
+	Query string
 }
 
 type eventsOnGetResp struct {
@@ -147,28 +153,22 @@ func (e *eventsHandler) onGet(w http.ResponseWriter, r *http.Request, l log.Logg
 		}
 	}
 
-	name, tags := parseName(vars.Get("name"))
-
-	events, _ := e.DB.GetEvents(from, to, name)
-	if tags == nil || len(tags) == 0 {
-		return http.StatusOK, events
+	query := vars.Get("query")
+	q, err := ParseQuery(query)
+	if err != nil {
+		l.Infof("parse query error: %s", err.Error())
+		return http.StatusBadRequest, "parse query error"
 	}
 
-	filteredEvents := make([]*Event, 0, len(events))
-	for _, e := range events {
-		if e.CheckTags(tags) {
-			filteredEvents = append(filteredEvents, e)
-		}
-	}
+	events, _ := q.Execute(e.DB, from, to)
 
 	response := &eventsOnGetResp{
 		Header: &eventsOnGetRespHeader{
-			From: from,
-			To:   to,
-			Name: name,
-			Tags: tags,
+			From:  from,
+			To:    to,
+			Query: query,
 		},
-		Events: filteredEvents,
+		Events: events,
 	}
 
 	return http.StatusOK, response
@@ -200,16 +200,24 @@ func (e *eventsHandler) onDelete(w http.ResponseWriter, r *http.Request, l log.L
 		return http.StatusBadRequest, "'to' < 'from'"
 	}
 
-	name := vars.Get("name")
+	query := vars.Get("query")
+	q, err := ParseQuery(query)
+	if err != nil {
+		l.Infof("parse query error: %s", err.Error())
+		return http.StatusBadRequest, "parse query error"
+	}
+
 	res := &struct {
 		Deleted int
 	}{}
-	if deleted, err := e.DB.DeleteEvents(from, to, name); err == nil {
+
+	if deleted, err := q.ExecuteDelete(e.DB, from, to); err == nil {
 		res.Deleted = deleted
 	} else {
 		l.Errorf("delete error: %s", err.Error())
 		return http.StatusInternalServerError, "delete error"
 	}
+
 	return http.StatusOK, res
 }
 
@@ -237,45 +245,39 @@ func (e eventsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-type humanEventsHandler struct {
+type bucketsHandler struct {
 	Configuration *Configuration
 	DB            *DB
 }
 
-func (h humanEventsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	l := log.With("remote", r.RemoteAddr).
-		With("req", r.RequestURI).
-		With("action", "humanEventsHandler.ServeHTTP")
+func (b *bucketsHandler) onGet(w http.ResponseWriter, r *http.Request, l log.Logger) (int, interface{}) {
+	l = l.With("action", "bucketsHandler.onGet")
 
-	r.ParseForm()
-	vars := r.Form
-
-	to := time.Now()
-	from := to.Add(time.Duration(-2) * time.Hour)
-
-	name, tags := parseName(vars.Get("name"))
-	if name == "" {
-		name = "_any_"
-	}
-
-	events, err := h.DB.GetEvents(from, to, name)
+	buckets, err := b.DB.Buckets()
 	if err != nil {
 		l.Errorf("get events error: %s", err.Error())
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+		return http.StatusInternalServerError, nil
 	}
 
-	w.WriteHeader(http.StatusOK)
-	w.Header().Set("Content-Type", "text/plain; charset=UTF-8")
-	w.Write([]byte(fmt.Sprintf("Events for %s from %s to %s\n\n", name, from, to)))
+	return http.StatusOK, buckets
+}
 
-	for i, e := range events {
-		if !e.CheckTags(tags) {
-			continue
+func (b bucketsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	l := log.With("remote", r.RemoteAddr).With("req", r.RequestURI)
+
+	code := http.StatusNotFound
+	var data interface{}
+
+	switch r.Method {
+	case "GET":
+		code, data = b.onGet(w, r, l)
+	}
+
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+	w.WriteHeader(code)
+	if data != nil {
+		if err := json.NewEncoder(w).Encode(data); err != nil {
+			l.Errorf("encoding result error: %s", err)
 		}
-		ts := time.Unix(0, e.Time)
-		w.Write([]byte(fmt.Sprintf("%d. %s   Name: %v\nTitle: %s\nText: %s\nTags: %s\n",
-			(i + 1), ts, e.Name, e.Title, e.Text, e.Tags)))
-		w.Write([]byte{'\n', '\n'})
 	}
 }

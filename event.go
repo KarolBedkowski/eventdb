@@ -4,24 +4,18 @@
 package main
 
 import (
-	"bytes"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"github.com/boltdb/bolt"
 	"github.com/prometheus/common/log"
 	"hash/adler32"
+	"sort"
 	"strings"
 	"time"
 )
 
-var defaultBucket = []byte("__default__")
-
 // ErrDecodeError when unmarshaling data
 var ErrDecodeError = errors.New("decode error")
-
-// AnyBucket means select all buckets
-const AnyBucket = "_any_"
 
 func init() {
 }
@@ -40,6 +34,21 @@ func (e *Event) SetTags(t string) {
 	e.Tags = tags
 }
 
+// ColumnValue get value for given column
+func (e *Event) ColumnValue(col string) (v string, ok bool) {
+	for _, c := range e.Cols {
+		if c.Name == col {
+			return c.Value, true
+		}
+	}
+	return
+}
+
+// TS return event time as time.Time
+func (e *Event) TS() time.Time {
+	return time.Unix(0, e.Time)
+}
+
 // Decode event
 func (e *Event) unmarshal(data []byte) (err error) {
 	defer func() {
@@ -50,14 +59,6 @@ func (e *Event) unmarshal(data []byte) (err error) {
 
 	_, err = e.Unmarshal(data[1:])
 	return err
-}
-
-// decode event ts - legacy
-func unmarshalTSlegacy(data []byte) (int64, error) {
-	var ts int64
-	buf := bytes.NewReader(data[:8])
-	err := binary.Read(buf, binary.BigEndian, &ts)
-	return ts, err
 }
 
 // decode event ts
@@ -100,24 +101,6 @@ func marshalTS(ts int64, data []byte) ([]byte, error) {
 	return buf, nil
 }
 
-// marshal event - legacy
-func marshalTSlegacy(ts int64, data []byte) ([]byte, error) {
-	key := new(bytes.Buffer)
-	if err := binary.Write(key, binary.BigEndian, ts); err != nil {
-		return nil, err
-	}
-	if data != nil {
-		hash := adler32.Checksum(data)
-		key.Write([]byte{
-			byte((hash >> 3) & 0xff),
-			byte((hash >> 2) & 0xff),
-			byte((hash >> 1) & 0xff),
-			byte(hash & 0xff),
-		})
-	}
-	return key.Bytes(), nil
-}
-
 // encode (marshal) Event
 func (e *Event) marshal() ([]byte, []byte, error) {
 	// KEY: ts(int64)crc(4) (12bytes)
@@ -136,46 +119,16 @@ func (e *Event) marshal() ([]byte, []byte, error) {
 	return buf, key, err
 }
 
-// CheckTags check if event has all `tags`
-func (e *Event) CheckTags(tags []string) bool {
-	if tags == nil || len(tags) == 0 {
-		return true
-	}
-
-	if e.Tags == nil || len(e.Tags) == 0 {
-		return false
-	}
-
-	for _, t := range tags {
-		found := false
-		for _, et := range e.Tags {
-			if t == et {
-				found = true
-				break
-			}
-		}
-		if !found {
-			return false
-		}
-	}
-
-	return true
-}
-
 // SaveEvent to database
 func (db *DB) SaveEvent(e *Event) error {
 	return db.db.Update(func(tx *bolt.Tx) error {
-		name := defaultBucket
-		if e.Name != "" {
-			name = []byte(e.Name)
-		}
-
-		b, err := tx.CreateBucketIfNotExists(name)
+		b, err := tx.CreateBucketIfNotExists([]byte(e.Name))
 		if err != nil {
 			return err
 		}
 
-		b.FillPercent = 0.99
+		b.FillPercent = 0.999
+
 		data, key, err := e.marshal()
 		if err == nil {
 			return b.Put(key, data)
@@ -185,48 +138,65 @@ func (db *DB) SaveEvent(e *Event) error {
 	})
 }
 
-func getEventsFromBucket(f, t int64, b *bolt.Bucket, bname []byte) []*Event {
-	fkey, err := marshalTS(f, nil)
-	if err != nil {
-		log.Errorf("ERROR: marshalTS for %v error: %s", t, err)
-		fkey = []byte{0}
-	}
+// DeleteEvents from database according to `from`-`to` time range and bucket `name`
+func (db *DB) DeleteEvents(bucket string, from, to time.Time, filter func(*Event) bool) (deleted int, err error) {
+	f := from.UnixNano()
+	t := to.UnixNano()
 
-	c := b.Cursor()
-	var events []*Event
+	err = db.db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(bucket))
+		if b == nil {
+			return fmt.Errorf("unknown bucket name: %v", bucket)
+		}
 
-	for k, v := c.Seek(fkey); k != nil; k, v = c.Next() {
-		if ts, err := unmarshalTS(k); err != nil {
-			log.Errorf("ERROR: decode event ts error: %s", err.Error())
-		} else if ts >= f && ts <= t {
-			var err error
-			e := &Event{}
+		b.FillPercent = 0.999
 
-			if v == nil || len(v) < 2 {
-				err = fmt.Errorf("invalid data")
-			} else {
-				switch v[0] {
-				case 1:
-					err = e.unmarshal(v)
-				default:
-					err = fmt.Errorf("invalid version: %v", v[0])
+		{
+			fkey, err := marshalTS(f, nil)
+			if err != nil {
+				log.Errorf("ERROR: marshalTS for %v error: %s", t, err)
+				fkey = []byte{0}
+			}
+
+			c := b.Cursor()
+			var keys [][]byte
+
+			for k, v := c.Seek(fkey); k != nil; k, _ = c.Next() {
+				if ts, err := unmarshalTS(k); err != nil {
+					log.Errorf("ERROR: decode event error: %v", err)
+				} else if ts >= f && ts <= t {
+					if filter == nil {
+						keys = append(keys, k)
+					} else {
+						e := &Event{}
+						if err := e.unmarshal(v); err != nil {
+							log.Errorf("ERROR: unmarshal  event error: %v", err)
+							continue
+						}
+						if filter(e) {
+							keys = append(keys, k)
+						}
+					}
 				}
 			}
 
-			if err == nil && e != nil {
-				events = append(events, e)
-			} else {
-				log.Errorf("ERROR: decode event ts: %v/%v error: %s", k, ts, err)
+			for _, k := range keys {
+				if err := b.Delete(k); err != nil {
+					return err
+				}
 			}
-		}
-	}
 
-	return events
+			deleted = len(keys)
+		}
+
+		return nil
+	})
+
+	return
 }
 
-// GetEvents from database according to `from`-`to` time range and bucket `name`
-func (db *DB) GetEvents(from, to time.Time, name string) ([]*Event, error) {
-	log.Debugf("GetEvents %s - %s [%s]", from, to, name)
+func (db *DB) GetEvents(bucket string, from, to time.Time, filter func(*Event) bool) ([]*Event, error) {
+	log.Debugf("GetEvents %s %s - %s", bucket, from, to)
 
 	f := from.UnixNano()
 	t := to.UnixNano()
@@ -237,96 +207,62 @@ func (db *DB) GetEvents(from, to time.Time, name string) ([]*Event, error) {
 	var events []*Event
 
 	err := db.db.View(func(tx *bolt.Tx) error {
-		if name == AnyBucket {
-			return tx.ForEach(func(name []byte, b *bolt.Bucket) error {
-				es := getEventsFromBucket(f, t, b, name)
-				events = append(events, es...)
-				return nil
-			})
-		}
-
-		bname := defaultBucket
-		if name != "" {
-			bname = []byte(name)
-		}
-
-		b := tx.Bucket(bname)
+		b := tx.Bucket([]byte(bucket))
 		if b == nil {
-			return fmt.Errorf("unknown bucket name: %v", name)
+			return fmt.Errorf("unknown bucket name: %v", bucket)
 		}
 
-		events = getEventsFromBucket(f, t, b, bname)
+		fkey, err := marshalTS(f, nil)
+		if err != nil {
+			log.Errorf("ERROR: marshalTS for %v error: %s", t, err)
+			fkey = []byte{0}
+		}
+
+		c := b.Cursor()
+
+		for k, v := c.Seek(fkey); k != nil; k, v = c.Next() {
+			if ts, err := unmarshalTS(k); err != nil {
+				log.Errorf("ERROR: decode event ts error: %s", err.Error())
+			} else if ts >= f && ts <= t {
+				var err error
+				e := &Event{}
+
+				if v == nil || len(v) < 2 {
+					err = fmt.Errorf("invalid data")
+				} else {
+					switch v[0] {
+					case 1:
+						err = e.unmarshal(v)
+					default:
+						err = fmt.Errorf("invalid version: %v", v[0])
+					}
+				}
+
+				if err == nil && e != nil {
+					if filter == nil || filter(e) {
+						events = append(events, e)
+					}
+				} else {
+					log.Errorf("ERROR: decode event ts: %v/%v error: %s", k, ts, err)
+				}
+			}
+		}
 		return nil
 	})
 
 	return events, err
 }
 
-func getEventsKeyFromBucket(f, t int64, b *bolt.Bucket) [][]byte {
-	fkey, err := marshalTS(f, nil)
-	if err != nil {
-		log.Errorf("ERROR: marshalTS for %v error: %s", t, err)
-		fkey = []byte{0}
-	}
+type EventsByTime []*Event
 
-	c := b.Cursor()
-	var keys [][]byte
+func (a EventsByTime) Len() int           { return len(a) }
+func (a EventsByTime) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a EventsByTime) Less(i, j int) bool { return a[i].Time < a[j].Time }
 
-	for k, _ := c.Seek(fkey); k != nil; k, _ = c.Next() {
-		if ts, err := unmarshalTS(k); err != nil {
-			log.Errorf("ERROR: decode event error: %v", err)
-		} else if ts >= f && ts <= t {
-			keys = append(keys, k)
-		}
-	}
-
-	return keys
+func SortEventsByTime(events []*Event) {
+	sort.Sort(EventsByTime(events))
 }
 
-// DeleteEvents from database according to `from`-`to` time range and bucket `name`
-func (db *DB) DeleteEvents(from, to time.Time, name string) (int, error) {
-	f := from.UnixNano()
-	t := to.UnixNano()
-
-	deleted := 0
-
-	err := db.db.Update(func(tx *bolt.Tx) error {
-		if name == AnyBucket {
-			return tx.ForEach(func(name []byte, b *bolt.Bucket) error {
-				keys := getEventsKeyFromBucket(f, t, b)
-
-				for _, k := range keys {
-					if err := b.Delete(k); err != nil {
-						return err
-					}
-				}
-
-				deleted += len(keys)
-				return nil
-			})
-		}
-
-		bname := defaultBucket
-		if name != "" {
-			bname = []byte(name)
-		}
-
-		b := tx.Bucket(bname)
-		if b == nil {
-			return fmt.Errorf("unknown bucket name: %v", name)
-		}
-		{
-			keys := getEventsKeyFromBucket(f, t, b)
-			for _, k := range keys {
-				if err := b.Delete(k); err != nil {
-					return err
-				}
-			}
-			deleted += len(keys)
-		}
-
-		return nil
-	})
-
-	return deleted, err
+func (e EventCol) String() string {
+	return fmt.Sprintf("%s:%s", e.Name, e.Value)
 }

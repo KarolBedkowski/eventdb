@@ -51,7 +51,7 @@ func main() {
 		log.Fatalf("Error parsing config file: %s", err)
 	}
 
-	db, err := DBOpen(c.DBFile)
+	db, err := DBOpen(c)
 	if err != nil {
 		panic(err)
 	}
@@ -59,7 +59,7 @@ func main() {
 	defer db.Close()
 
 	vw := vacuumWorker{Configuration: c, DB: db}
-	vw.Start()
+	go vw.Start()
 
 	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
 		if req.URL.Path != "/" {
@@ -71,16 +71,18 @@ func main() {
 	})
 
 	apiHandler := eventsHandler{Configuration: c, DB: db}
-	http.Handle("/api/v1/event", prometheus.InstrumentHandler("api-v1-event", apiHandler))
+	http.Handle("/api/v2/event", prometheus.InstrumentHandler("api-v2-event", apiHandler))
+	apiBucketsHandler := bucketsHandler{Configuration: c, DB: db}
+	http.Handle("/api/v2/buckets", prometheus.InstrumentHandler("api-v2-buckets", apiBucketsHandler))
 
-	ah := AnnotationHandler{DB: db}
+	ah := AnnotationHandler{Configuration: c, DB: db}
 	http.Handle("/annotations", prometheus.InstrumentHandler("annotations", ah))
 
 	pwh := PromWebHookHandler{Configuration: c, DB: db}
 	http.Handle("/api/v1/promwebhook", prometheus.InstrumentHandler("api-v1-promwebhook", pwh))
 
-	hh := humanEventsHandler{Configuration: c, DB: db}
-	http.Handle("/last", hh)
+	hh := queryPageHandler{Configuration: c, DB: db}
+	http.Handle("/query", prometheus.InstrumentHandler("query", hh))
 
 	http.Handle("/metrics", promhttp.Handler())
 
@@ -98,7 +100,9 @@ func main() {
 				if newConf, err := LoadConfiguration(*configFile); err == nil {
 					log.Debugf("new configuration: %+v", newConf)
 					apiHandler.Configuration = newConf
+					apiBucketsHandler.Configuration = newConf
 					vw.Configuration = newConf
+					ah.Configuration = newConf
 					hh.Configuration = newConf
 					pwh.Configuration = newConf
 					log.Info("configuration reloaded")
@@ -140,6 +144,8 @@ type vacuumWorker struct {
 }
 
 func (v *vacuumWorker) Start() {
+	time.Sleep(1 * time.Minute)
+
 	deletedCntr := prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Name: "eventdb_vacuum_events_deleted_total",
@@ -157,21 +163,21 @@ func (v *vacuumWorker) Start() {
 	prometheus.MustRegister(deletedCntr)
 	prometheus.MustRegister(lastRun)
 
-	go func() {
-		time.Sleep(1 * time.Minute)
-		for {
-			if v.Configuration.RetentionParsed != nil {
-				to := time.Now().Add(-(*v.Configuration.RetentionParsed))
-				from := time.Time{}
-				if deleted, err := v.DB.DeleteEvents(from, to, AnyBucket); err == nil {
+	for {
+		if v.Configuration.RetentionParsed != nil {
+			to := time.Now().Add(-(*v.Configuration.RetentionParsed))
+			from := time.Time{}
+			buckets, _ := v.DB.Buckets()
+			for _, bucket := range buckets {
+				if deleted, err := v.DB.DeleteEvents(bucket, from, to, nil); err == nil {
 					log.Infof("vacuum deleted %d to %s", deleted, to)
 					deletedCntr.Add(float64(deleted))
 				} else {
 					log.Errorf("vacuum delete error: %s", err.Error())
 				}
-				lastRun.SetToCurrentTime()
 			}
-			time.Sleep(3 * time.Hour)
+			lastRun.SetToCurrentTime()
 		}
-	}()
+		time.Sleep(3 * time.Hour)
+	}
 }

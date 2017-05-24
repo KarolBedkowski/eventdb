@@ -29,14 +29,14 @@ type (
 )
 
 // DBOpen open or create bolt database
-func DBOpen(filename string) (*DB, error) {
-	bdb, err := bolt.Open(filename, 0600, &bolt.Options{Timeout: 10 * time.Second})
+func DBOpen(conf *Configuration) (*DB, error) {
+	bdb, err := bolt.Open(conf.DBFile, 0600, &bolt.Options{Timeout: 10 * time.Second})
 	if err != nil {
 		return nil, err
 	}
 
 	err = bdb.Update(func(tx *bolt.Tx) error {
-		if _, err := tx.CreateBucketIfNotExists(defaultBucket); err != nil {
+		if _, err := tx.CreateBucketIfNotExists([]byte(conf.DefaultBucket)); err != nil {
 			return fmt.Errorf("db create bucket error: %s", err.Error())
 		}
 		return nil
@@ -47,7 +47,7 @@ func DBOpen(filename string) (*DB, error) {
 	}
 
 	db := &DB{
-		dbFilename: filename,
+		dbFilename: conf.DBFile,
 		db:         bdb,
 		metrics:    newBoltMetrics(bdb),
 		stats:      bdb.Stats(),
@@ -66,6 +66,18 @@ func (db *DB) Close() error {
 		db.db = nil
 	}
 	return nil
+}
+
+// Buckets return list of all buckets in db
+func (db *DB) Buckets() (buckets []string, err error) {
+	err = db.db.View(func(tx *bolt.Tx) error {
+		return tx.ForEach(func(name []byte, b *bolt.Bucket) error {
+			buckets = append(buckets, string(name))
+			return nil
+		})
+	})
+
+	return
 }
 
 // NewInternalsHandler create http handlers related to database

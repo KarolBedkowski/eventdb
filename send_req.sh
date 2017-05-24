@@ -6,13 +6,14 @@ function send_event() {
 	local now
 	now=$(date +%s)
 
-	cat <<EOF | curl -s --data-binary @- "http://localhost:9701/api/v1/event"
+	cat <<EOF | curl -s --data-binary @- "http://localhost:9701/api/v2/event"
 {
 	"name": "a1",
-	"title": "title $(date)",
+	"summary": "summary $(date)",
 	"tags": "t1, t2",
-	"text": "text for event ${now}",
-	"time": ${now}000000000
+	"description": "description for event ${now}",
+	"time": ${now}000000000,
+	"labels": {"c1": "val1", "c2": "val2"}
 }
 EOF
 }
@@ -27,13 +28,14 @@ function generate_events() {
 		t1=$(bc <<< "($d / 100) % 10")
 		v1=$(bc <<< "($d / 100) % 15")
 
-		cat <<EOF | curl -s --data-binary @- "http://localhost:9701/api/v1/event"
+		cat <<EOF | curl -s --data-binary @- "http://localhost:9701/api/v2/event"
 {
 	"name": "testname",
-	"title": "title $(date --date @$d)",
+	"summary": "summary $(date --date @$d)",
 	"tags": "t${t1} v${v1}",
-	"text": "text for event ${d}",
-	"time": ${d}000000000
+	"description": "description for event ${d}",
+	"time": ${d}000000000,
+	"labels": {"c1": "val_${t1}", "c2": "val_${v1}"}
 }
 EOF
 	done
@@ -44,12 +46,12 @@ function generate_events2() {
 	now=$(date +%s)
 
 	for (( d=0; d<10; d=d+1 )); do
-		cat <<EOF | curl -s --data-binary @- "http://localhost:9701/api/v1/event"
+		cat <<EOF | curl -s --data-binary @- "http://localhost:9701/api/v2/event"
 {
 	"name": "testname",
-	"title": "title $now",
+	"summary": "summary $now",
 	"tags": "t$d",
-	"text": "text for event ${d}",
+	"description": "description for event ${d}",
 	"time": ${now}000000000
 }
 EOF
@@ -64,12 +66,12 @@ function generate_events_pi() {
 	start=$((end - 60000 ))
 
 	for (( d=start; d<end; d=d+600 )); do
-		cat <<EOF | curl -s --data-binary @- "http://pi:9701/api/v1/event"
+		cat <<EOF | curl -s --data-binary @- "http://pi:9701/api/v2/event"
 {
 	"name": "test",
-	"title": "title $(date --date @$d)",
+	"summary": "summary $(date --date @$d)",
 	"tags": "",
-	"text": "text for event ${d}",
+	"description": "description for event ${d}",
 	"time": ${d}000000000
 }
 EOF
@@ -85,14 +87,15 @@ function get_ann() {
   "annotation": {
     "datasource": "generic datasource",
     "enable": true,
-    "name": "${2:-testname}"
+    "name": "test",
+    "query": "${2:-testname}"
   }
 }
 EOF
 }
 
 function get_events() {
-	curl -X GET -s "http://localhost:9701/api/v1/event?name=_any_"
+	curl -X GET -s "http://localhost:9701/api/v2/event?query=testname"
 }
 
 
@@ -103,7 +106,16 @@ function get_last() {
 function get_events_last10min() {
 	local ts
 	ts=$(date --date '10 minutes ago' +%s)
-	curl -X GET -s "http://localhost:9701/api/v1/event?from=${ts}&name=_any_"
+	curl -X GET -s "http://localhost:9701/api/v2/event?from=${ts}&query=testname"
+}
+
+function get_events_last1h() {
+	local ts query
+	query=${1:-testname}
+	ts=$(date --date '1 hour ago' +%s)
+	curl -X GET -s -g -G \
+		--data-urlencode "query=${query}" \
+		"http://localhost:9701/api/v2/event?from=${ts}"
 }
 
 
@@ -115,6 +127,7 @@ Usage:
 	$0 get_ann
 	$0 get_events
 	$0 get_events_last10min
+	$0 get_events_last1h
 	$0 get_last
 EOF
 	exit -1

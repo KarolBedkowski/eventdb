@@ -14,11 +14,24 @@ import (
 )
 
 type (
+	PromWebHookConf struct {
+		MappedLabels []string `yaml:"mapped_labels"`
+	}
+
+	AnnotationsConf struct {
+		ReturnedCols []string `yaml:"returned_cols"`
+	}
+
 	// Configuration keep application configuration
 	Configuration struct {
 		DBFile    string `yaml:"dbfile"`
 		Retention string `yaml:"retention"`
 		Debug     bool   `yaml:"debug"`
+
+		PromWebHookConf *PromWebHookConf `yaml:"promwebhool_conf"`
+		AnnotationsConf *AnnotationsConf `yaml:"annotations_conf"`
+
+		DefaultBucket string `yaml:"default_bucket"`
 
 		RetentionParsed *time.Duration `yaml:"-"`
 	}
@@ -27,6 +40,9 @@ type (
 func (c *Configuration) validate() error {
 	if c.DBFile == "" {
 		c.DBFile = "eventdb.boltdb"
+	}
+	if c.DefaultBucket == "" {
+		c.DefaultBucket = "__default__"
 	}
 	return nil
 }

@@ -24,6 +24,7 @@ type (
 		Datasource string `json:"datasource"`
 		Enable     bool   `json:"enable"`
 		Name       string `json:"name"`
+		Query      string `json:"query"`
 	}
 
 	annotationReq struct {
@@ -43,7 +44,8 @@ type (
 
 	// AnnotationHandler for grafana annotations requests
 	AnnotationHandler struct {
-		DB *DB
+		DB            *DB
+		Configuration *Configuration
 	}
 )
 
@@ -69,26 +71,37 @@ func (a *AnnotationHandler) onPost(w http.ResponseWriter, r *http.Request, l log
 		return http.StatusBadRequest, "wrong to date: " + err.Error()
 	}
 
-	name, tags := parseName(ar.Annotation.Name)
-
-	events, err := a.DB.GetEvents(from, to, name)
+	q, err := ParseQuery(ar.Annotation.Query)
 	if err != nil {
-		l.Errorf("get events (%v, %v, %v) error: %s", from, to, name, err.Error())
-		return http.StatusBadRequest, "error"
+		l.Infof("parse query error: %s", err.Error())
+		return http.StatusBadRequest, "parse query error"
 	}
+
+	events, _ := q.Execute(a.DB, from, to)
 
 	resp := make([]annotationResp, 0, len(events))
 	for _, e := range events {
-		if !e.CheckTags(tags) {
-			continue
-		}
-		resp = append(resp, annotationResp{
+		ar := annotationResp{
 			Annotation: ar.Annotation,
-			Title:      e.Title,
+			Title:      e.Summary,
 			Time:       e.Time / 1000000,
-			Text:       e.Text,
+			Text:       e.Description,
 			Tags:       strings.Join(e.Tags, " "),
-		})
+		}
+
+		if a.Configuration.AnnotationsConf != nil {
+			var cv []string
+			for _, c := range a.Configuration.AnnotationsConf.ReturnedCols {
+				if v, ok := e.ColumnValue(c); ok {
+					cv = append(cv, c+": "+v)
+				}
+			}
+			if len(cv) > 0 {
+				ar.Text += "\n" + strings.Join(cv, "\n")
+			}
+		}
+
+		resp = append(resp, ar)
 	}
 
 	return http.StatusOK, resp

@@ -41,7 +41,16 @@ func parseTime(t string) (time.Time, error) {
 	if ts, err := time.Parse(time.RFC3339, t); err == nil {
 		return ts, nil
 	}
-	return time.Parse("2006-01-02T15:04:05", t)
+	if ts, err := time.Parse("2006-01-02T15:04:05", t); err == nil {
+		return ts, nil
+	}
+	if ts, err := time.Parse("2006-01-02 15:04:05 -0700", t); err == nil {
+		return ts, nil
+	}
+	if ts, err := time.Parse("2006-01-02 15:04:05", t); err == nil {
+		return ts, nil
+	}
+	return time.Parse("2006-01-02", t)
 }
 
 func numToUnixNano(ts int64) int64 {
