@@ -77,6 +77,8 @@ func main() {
 
 	ah := AnnotationHandler{Configuration: c, DB: db}
 	http.Handle("/annotations", prometheus.InstrumentHandler("annotations", ah))
+	qh := QueryHandler{Configuration: c, DB: db}
+	http.Handle("/query", prometheus.InstrumentHandler("query", qh))
 	sh := SearchHandler{Configuration: c, DB: db}
 	http.Handle("/search", prometheus.InstrumentHandler("search", sh))
 
@@ -105,6 +107,7 @@ func main() {
 					apiBucketsHandler.Configuration = newConf
 					vw.Configuration = newConf
 					ah.Configuration = newConf
+					qh.Configuration = newConf
 					sh.Configuration = newConf
 					hh.Configuration = newConf
 					pwh.Configuration = newConf
