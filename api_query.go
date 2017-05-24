@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"github.com/prometheus/common/log"
 	"net/http"
+	"time"
 )
 
 type (
@@ -47,13 +48,17 @@ type (
 	}
 )
 
-func (q *queryTargetResp) appendTS(ts int64) {
-	if q.prevTS == ts {
+func (q *queryTargetResp) appendTS(ts int64, interval int64) {
+	tts := ts
+	if interval > 1 {
+		tts = ts / interval
+	}
+	if q.prevTS == tts {
 		last := len(q.Datapoints) - 1
 		q.Datapoints[last][0]++
 	} else {
 		q.Datapoints = append(q.Datapoints, []float64{1, float64(ts / 1000000)})
-		q.prevTS = ts
+		q.prevTS = tts
 	}
 }
 
@@ -79,6 +84,16 @@ func (a *QueryHandler) onPost(w http.ResponseWriter, r *http.Request, l log.Logg
 		return http.StatusBadRequest, "wrong to date: " + err.Error()
 	}
 
+	var interval int64
+	if qr.Interval != "" {
+		d, err := time.ParseDuration(qr.Interval)
+		if err == nil {
+			interval = int64(d.Seconds()) * 1000000000
+		} else {
+			l.Info("parse interval '%v' error: %s", qr.Interval, err)
+		}
+	}
+
 	resp := make([]*queryTargetResp, len(qr.Targets))
 
 	for i, target := range qr.Targets {
@@ -102,11 +117,19 @@ func (a *QueryHandler) onPost(w http.ResponseWriter, r *http.Request, l log.Logg
 		}
 
 		events, _ := q.Execute(a.DB, from, to)
+
 		SortEventsByTime(events)
 
 		for _, e := range events {
-			qtr.appendTS(e.Time)
+			qtr.appendTS(e.Time, interval)
 		}
+
+		if qr.MaxDataPoints > 0 && len(qtr.Datapoints) > qr.MaxDataPoints {
+			l.Debugf("limit datapoints for %s from %d to %d",
+				target.Target, len(qtr.Datapoints), qr.MaxDataPoints)
+			qtr.Datapoints = qtr.Datapoints[:qr.MaxDataPoints]
+		}
+
 		resp[i] = qtr
 	}
 
