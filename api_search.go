@@ -54,9 +54,9 @@ func (s SearchHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case "POST":
-		code, data = a.onPost(w, r, l)
+		code, data = s.onPost(w, r, l)
 	case "OPTIONS":
-		code, data = a.onOptions(w, r, l)
+		code, data = s.onOptions(w, r, l)
 	}
 
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
