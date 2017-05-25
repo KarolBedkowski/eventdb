@@ -53,7 +53,7 @@ func (h queryPageHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var data *queryPageData
 
 	data, err = h.parseInput(r)
-	if err == nil {
+	if err == nil && r.Form.Get("query") != "" {
 		err = data.loadEvents(&h)
 	}
 
@@ -80,7 +80,6 @@ func (h *queryPageHandler) parseInput(r *http.Request) (data *queryPageData, err
 
 	if data.To == "" {
 		data.toT = time.Now()
-		data.To = data.toT.Format(defaultTSFormat)
 	} else {
 		data.toT, err = parseTime(data.To)
 		if err != nil {
@@ -129,7 +128,7 @@ const tpl = `
 	<meta charset="utf-8">
 	<title>EventDB</title>
 	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<style type="text/css">body{margin:20px auto;max-width:1050px;line-height:1.6;font-size:12px;color:#444;padding:0 10px}h1,h2,h3{line-height:1.2}</style>
+	<style type="text/css">body{margin:20px auto;line-height:1.6;font-size:12px;color:#444;padding:0 10px}h1,h2,h3{line-height:1.2}</style>
 </head>
 <body>
 	<h1>EventDB</h1>
@@ -139,9 +138,9 @@ const tpl = `
 		<label for="query">Query</label><br/>
 		<textarea id="query" name="query" cols="80" rows="5">{{ .Query }}</textarea><br/>
 		<label for="from">From:</label><br/>
-		<input id="from" name="from" value="{{ .From }}" /></br>
+		<input id="from" name="from" value="{{ .From }}" /><br/>
 		<label for="to">To:</label><br/>
-		<input id="to" name="to" value="{{ .To }}" /></br>
+		<input id="to" name="to" value="{{ .To }}" /><br/><br/>
 		<button type="submit">Send</button>
 	</form>
 	<br/>
