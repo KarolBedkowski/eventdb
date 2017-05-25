@@ -5,3 +5,7 @@ debug: true
 annotations_conf:
   returned_cols:
     - "c1"
+
+promwebhool_conf:
+  default_bucket: alertmanager
+  # mapped_labels:

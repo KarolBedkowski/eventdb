@@ -135,7 +135,10 @@ func (p *PromWebHookHandler) onPost(w http.ResponseWriter, r *http.Request, l lo
 		}
 
 		if e.Name == "" {
-			e.Name = p.Configuration.DefaultBucket
+			e.Name = p.Configuration.PromWebHookConf.DefaultBucket
+			if e.Name == "" {
+				e.Name = p.Configuration.DefaultBucket
+			}
 		}
 
 		if err := p.DB.SaveEvent(e); err != nil {

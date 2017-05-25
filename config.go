@@ -16,6 +16,8 @@ import (
 type (
 	PromWebHookConf struct {
 		MappedLabels []string `yaml:"mapped_labels"`
+
+		DefaultBucket string `yaml:"default_bucket"`
 	}
 
 	AnnotationsConf struct {
