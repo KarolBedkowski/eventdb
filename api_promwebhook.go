@@ -108,10 +108,13 @@ func (p *PromWebHookHandler) onPost(w http.ResponseWriter, r *http.Request, l lo
 			}
 		}
 
+		filterCols := (p.Configuration.PromWebHookConf != nil &&
+			len(p.Configuration.PromWebHookConf.MappedLabels) > 0)
+
 		// Cols
 		for k, v := range a.Labels {
 
-			if p.Configuration.PromWebHookConf != nil {
+			if filterCols {
 				accepted := false
 				for _, ml := range p.Configuration.PromWebHookConf.MappedLabels {
 					if ml == k {
