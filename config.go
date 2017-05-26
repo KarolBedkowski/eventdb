@@ -14,12 +14,14 @@ import (
 )
 
 type (
+	// PromWebHookConf configure api for Prometheus Alertmanager
 	PromWebHookConf struct {
 		MappedLabels []string `yaml:"mapped_labels"`
 
 		Bucket string `yaml:"bucket"`
 	}
 
+	// AnnotationsConf configure api for Grafana annotations
 	AnnotationsConf struct {
 		ReturnedCols []string `yaml:"returned_cols"`
 	}

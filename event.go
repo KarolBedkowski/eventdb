@@ -195,6 +195,8 @@ func (db *DB) DeleteEvents(bucket string, from, to time.Time, filter func(*Event
 	return
 }
 
+// GetEvents load events from database accoring to `from`-`to` time range, from one `bucket` and optionally
+// filtered by `filter` function
 func (db *DB) GetEvents(bucket string, from, to time.Time, filter func(*Event) bool) ([]*Event, error) {
 	log.Debugf("GetEvents %s %s - %s", bucket, from, to)
 
@@ -253,14 +255,15 @@ func (db *DB) GetEvents(bucket string, from, to time.Time, filter func(*Event) b
 	return events, err
 }
 
-type EventsByTime []*Event
+type eventsByTime []*Event
 
-func (a EventsByTime) Len() int           { return len(a) }
-func (a EventsByTime) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a EventsByTime) Less(i, j int) bool { return a[i].Time < a[j].Time }
+func (a eventsByTime) Len() int           { return len(a) }
+func (a eventsByTime) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a eventsByTime) Less(i, j int) bool { return a[i].Time < a[j].Time }
 
+// SortEventsByTime sort list of events by time
 func SortEventsByTime(events []*Event) {
-	sort.Sort(EventsByTime(events))
+	sort.Sort(eventsByTime(events))
 }
 
 func (e EventCol) String() string {
