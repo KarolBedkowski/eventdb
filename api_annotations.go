@@ -79,8 +79,7 @@ func (a *AnnotationHandler) onPost(w http.ResponseWriter, r *http.Request, l log
 
 	events, _ := q.Execute(a.DB, from, to)
 
-	addCols := (a.Configuration.AnnotationsConf != nil &&
-		len(a.Configuration.AnnotationsConf.ReturnedCols) > 0)
+	addCols := len(a.Configuration.AnnotationsConf.ReturnedCols) > 0
 
 	resp := make([]annotationResp, 0, len(events))
 	for _, e := range events {

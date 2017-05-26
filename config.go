@@ -30,8 +30,8 @@ type (
 		Retention string `yaml:"retention"`
 		Debug     bool   `yaml:"debug"`
 
-		PromWebHookConf *PromWebHookConf `yaml:"promwebhool_conf"`
-		AnnotationsConf *AnnotationsConf `yaml:"annotations_conf"`
+		PromWebHookConf PromWebHookConf `yaml:"promwebhool_conf"`
+		AnnotationsConf AnnotationsConf `yaml:"annotations_conf"`
 
 		DefaultBucket string `yaml:"default_bucket"`
 
