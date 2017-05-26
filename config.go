@@ -17,7 +17,7 @@ type (
 	PromWebHookConf struct {
 		MappedLabels []string `yaml:"mapped_labels"`
 
-		DefaultBucket string `yaml:"default_bucket"`
+		Bucket string `yaml:"bucket"`
 	}
 
 	AnnotationsConf struct {
@@ -45,6 +45,9 @@ func (c *Configuration) validate() error {
 	}
 	if c.DefaultBucket == "" {
 		c.DefaultBucket = "__default__"
+	}
+	if c.PromWebHookConf.Bucket == "" {
+		c.PromWebHookConf.Bucket = c.DefaultBucket
 	}
 	return nil
 }
