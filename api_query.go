@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"github.com/prometheus/common/log"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -103,6 +104,14 @@ func (a *QueryHandler) onPost(w http.ResponseWriter, r *http.Request, l log.Logg
 		if target.Type != "timeserie" {
 			l.Info("invalid target type: %v", target.Type)
 			continue
+		}
+
+		if target.Target == "__all__" {
+			if buckets, err := a.DB.Buckets(); err == nil {
+				target.Target = strings.Join(buckets, ";")
+			} else {
+				l.Warnf("load buckets error: %s", err)
+			}
 		}
 
 		q, err := ParseQuery(target.Target)
