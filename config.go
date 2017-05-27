@@ -14,10 +14,14 @@ import (
 )
 
 type (
+	// PromWebHookConf configure api for Prometheus Alertmanager
 	PromWebHookConf struct {
 		MappedLabels []string `yaml:"mapped_labels"`
+
+		Bucket string `yaml:"bucket"`
 	}
 
+	// AnnotationsConf configure api for Grafana annotations
 	AnnotationsConf struct {
 		ReturnedCols []string `yaml:"returned_cols"`
 	}
@@ -28,8 +32,8 @@ type (
 		Retention string `yaml:"retention"`
 		Debug     bool   `yaml:"debug"`
 
-		PromWebHookConf *PromWebHookConf `yaml:"promwebhool_conf"`
-		AnnotationsConf *AnnotationsConf `yaml:"annotations_conf"`
+		PromWebHookConf PromWebHookConf `yaml:"promwebhool_conf"`
+		AnnotationsConf AnnotationsConf `yaml:"annotations_conf"`
 
 		DefaultBucket string `yaml:"default_bucket"`
 
@@ -43,6 +47,9 @@ func (c *Configuration) validate() error {
 	}
 	if c.DefaultBucket == "" {
 		c.DefaultBucket = "__default__"
+	}
+	if c.PromWebHookConf.Bucket == "" {
+		c.PromWebHookConf.Bucket = c.DefaultBucket
 	}
 	return nil
 }

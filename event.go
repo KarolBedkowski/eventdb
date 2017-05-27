@@ -195,6 +195,8 @@ func (db *DB) DeleteEvents(bucket string, from, to time.Time, filter func(*Event
 	return
 }
 
+// GetEvents load events from database accoring to `from`-`to` time range, from one `bucket` and optionally
+// filtered by `filter` function
 func (db *DB) GetEvents(bucket string, from, to time.Time, filter func(*Event) bool) ([]*Event, error) {
 	log.Debugf("GetEvents %s %s - %s", bucket, from, to)
 
@@ -253,14 +255,60 @@ func (db *DB) GetEvents(bucket string, from, to time.Time, filter func(*Event) b
 	return events, err
 }
 
-type EventsByTime []*Event
+// CountEvents return list of timestamps from database according to `from`-`to` time range and bucket `name`
+func (db *DB) CountEvents(bucket string, from, to time.Time, filter func(*Event) bool) (timestamps []int64, err error) {
+	f := from.UnixNano()
+	t := to.UnixNano()
 
-func (a EventsByTime) Len() int           { return len(a) }
-func (a EventsByTime) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a EventsByTime) Less(i, j int) bool { return a[i].Time < a[j].Time }
+	err = db.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(bucket))
+		if b == nil {
+			return fmt.Errorf("unknown bucket name: %v", bucket)
+		}
 
+		{
+			fkey, err := marshalTS(f, nil)
+			if err != nil {
+				log.Errorf("ERROR: marshalTS for %v error: %s", t, err)
+				fkey = []byte{0}
+			}
+
+			c := b.Cursor()
+			for k, v := c.Seek(fkey); k != nil; k, _ = c.Next() {
+				if ts, err := unmarshalTS(k); err != nil {
+					log.Errorf("ERROR: decode event error: %v", err)
+				} else if ts >= f && ts <= t {
+					if filter == nil {
+						timestamps = append(timestamps, ts)
+					} else {
+						e := &Event{}
+						if err := e.unmarshal(v); err != nil {
+							log.Errorf("ERROR: unmarshal  event error: %v", err)
+							continue
+						}
+						if filter(e) {
+							timestamps = append(timestamps, ts)
+						}
+					}
+				}
+			}
+		}
+
+		return nil
+	})
+
+	return
+}
+
+type eventsByTime []*Event
+
+func (a eventsByTime) Len() int           { return len(a) }
+func (a eventsByTime) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a eventsByTime) Less(i, j int) bool { return a[i].Time < a[j].Time }
+
+// SortEventsByTime sort list of events by time
 func SortEventsByTime(events []*Event) {
-	sort.Sort(EventsByTime(events))
+	sort.Sort(eventsByTime(events))
 }
 
 func (e EventCol) String() string {

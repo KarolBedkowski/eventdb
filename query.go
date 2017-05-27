@@ -81,6 +81,26 @@ o:
 	return false
 }
 
+func (s *subquery) matchAny() bool {
+	for _, c := range s.conds {
+		if len(c) == 1 {
+			if _, ok := c[0].(*conditionMatchAll); ok {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (s *subquery) simplify() {
+	if s.matchAny() {
+		if len(s.conds) > 1 {
+			log.Debugf("subquery %v simplfied to conditionMatchAll", s)
+			s.conds = [][]condition{[]condition{&conditionMatchAll{}}}
+		}
+	}
+}
+
 func (s *subquery) String() string {
 	return fmt.Sprintf("subquery{bucket=%v, cons=%v}", s.bucket, s.conds)
 }
@@ -156,6 +176,7 @@ func ParseQuery(query string) (q *Query, err error) {
 	}
 
 	for _, k := range qpb {
+		k.simplify()
 		rq.queries = append(rq.queries, k)
 	}
 
@@ -165,7 +186,12 @@ func ParseQuery(query string) (q *Query, err error) {
 // Execute receive events from database according to query
 func (q *Query) Execute(db *DB, from, to time.Time) (result []*Event, err error) {
 	for _, s := range q.queries {
-		events, e := db.GetEvents(s.bucket, from, to, s.match)
+		matchF := s.match
+		if s.matchAny() {
+			matchF = nil
+			log.Debugf("Query %v executeDelete - match all", q)
+		}
+		events, e := db.GetEvents(s.bucket, from, to, matchF)
 		if e != nil {
 			return nil, e
 		}
@@ -177,11 +203,33 @@ func (q *Query) Execute(db *DB, from, to time.Time) (result []*Event, err error)
 // ExecuteDelete delete events according to query
 func (q *Query) ExecuteDelete(db *DB, from, to time.Time) (deleted int, err error) {
 	for _, s := range q.queries {
-		d, e := db.DeleteEvents(s.bucket, from, to, s.match)
+		matchF := s.match
+		if s.matchAny() {
+			matchF = nil
+			log.Debugf("Query %v executeDelete - match all", q)
+		}
+		d, e := db.DeleteEvents(s.bucket, from, to, matchF)
 		if e != nil {
 			return 0, e
 		}
 		deleted += d
+	}
+	return
+}
+
+// ExecuteCount return list of timestamps selected by query
+func (q *Query) ExecuteCount(db *DB, from, to time.Time) (timestamps []int64, err error) {
+	for _, s := range q.queries {
+		matchF := s.match
+		if s.matchAny() {
+			matchF = nil
+			log.Debugf("Query %v executeCount - match all", q)
+		}
+		d, e := db.CountEvents(s.bucket, from, to, matchF)
+		if e != nil {
+			return nil, e
+		}
+		timestamps = append(timestamps, d...)
 	}
 	return
 }

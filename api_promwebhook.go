@@ -87,6 +87,7 @@ func (p *PromWebHookHandler) onPost(w http.ResponseWriter, r *http.Request, l lo
 		}
 
 		e := &Event{
+			Name: p.Configuration.PromWebHookConf.Bucket,
 			Time: a.StartsAt.UnixNano(),
 		}
 
@@ -108,10 +109,12 @@ func (p *PromWebHookHandler) onPost(w http.ResponseWriter, r *http.Request, l lo
 			}
 		}
 
+		filterCols := len(p.Configuration.PromWebHookConf.MappedLabels) > 0
+
 		// Cols
 		for k, v := range a.Labels {
 
-			if p.Configuration.PromWebHookConf != nil {
+			if filterCols {
 				accepted := false
 				for _, ml := range p.Configuration.PromWebHookConf.MappedLabels {
 					if ml == k {
@@ -127,15 +130,9 @@ func (p *PromWebHookHandler) onPost(w http.ResponseWriter, r *http.Request, l lo
 			switch k {
 			case "tags":
 				e.SetTags(strings.TrimSpace(v))
-			case "name":
-				e.Name = strings.TrimSpace(v)
 			default:
 				e.Cols = append(e.Cols, EventCol{k, v})
 			}
-		}
-
-		if e.Name == "" {
-			e.Name = p.Configuration.DefaultBucket
 		}
 
 		if err := p.DB.SaveEvent(e); err != nil {
