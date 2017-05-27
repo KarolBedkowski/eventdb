@@ -39,6 +39,9 @@ func (s *SearchHandler) onPost(w http.ResponseWriter, r *http.Request, l log.Log
 		l.Info("get buckets error: %s", err)
 		return http.StatusInternalServerError, err.Error()
 	}
+
+	buckets = append(buckets, "__all__")
+
 	return http.StatusOK, buckets
 }
 
