@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"github.com/prometheus/common/log"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 )
@@ -106,15 +107,17 @@ func (a *QueryHandler) onPost(w http.ResponseWriter, r *http.Request, l log.Logg
 			continue
 		}
 
-		if target.Target == "__all__" {
+		query := target.Target
+
+		if query == "__all__" {
 			if buckets, err := a.DB.Buckets(); err == nil {
-				target.Target = strings.Join(buckets, ";")
+				query = strings.Join(buckets, ";")
 			} else {
 				l.Warnf("load buckets error: %s", err)
 			}
 		}
 
-		q, err := ParseQuery(target.Target)
+		q, err := ParseQuery(query)
 		if err != nil {
 			l.Infof("parse query error: %s", err.Error())
 			return http.StatusBadRequest, "parse query error"
@@ -125,12 +128,11 @@ func (a *QueryHandler) onPost(w http.ResponseWriter, r *http.Request, l log.Logg
 			Datapoints: make([][]float64, 0),
 		}
 
-		events, _ := q.Execute(a.DB, from, to)
+		timestamps, _ := q.ExecuteCount(a.DB, from, to)
+		sort.Sort(timestampsAsc(timestamps))
 
-		SortEventsByTime(events)
-
-		for _, e := range events {
-			qtr.appendTS(e.Time, interval)
+		for _, ts := range timestamps {
+			qtr.appendTS(ts, interval)
 		}
 
 		if qr.MaxDataPoints > 0 && len(qtr.Datapoints) > qr.MaxDataPoints {
@@ -144,6 +146,12 @@ func (a *QueryHandler) onPost(w http.ResponseWriter, r *http.Request, l log.Logg
 
 	return http.StatusOK, resp
 }
+
+type timestampsAsc []int64
+
+func (a timestampsAsc) Len() int           { return len(a) }
+func (a timestampsAsc) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a timestampsAsc) Less(i, j int) bool { return a[i] < a[j] }
 
 func (a *QueryHandler) onOptions(w http.ResponseWriter, r *http.Request, l log.Logger) (int, interface{}) {
 	return http.StatusOK, ""

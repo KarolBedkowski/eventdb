@@ -255,6 +255,51 @@ func (db *DB) GetEvents(bucket string, from, to time.Time, filter func(*Event) b
 	return events, err
 }
 
+// CountEvents return list of timestamps from database according to `from`-`to` time range and bucket `name`
+func (db *DB) CountEvents(bucket string, from, to time.Time, filter func(*Event) bool) (timestamps []int64, err error) {
+	f := from.UnixNano()
+	t := to.UnixNano()
+
+	err = db.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(bucket))
+		if b == nil {
+			return fmt.Errorf("unknown bucket name: %v", bucket)
+		}
+
+		{
+			fkey, err := marshalTS(f, nil)
+			if err != nil {
+				log.Errorf("ERROR: marshalTS for %v error: %s", t, err)
+				fkey = []byte{0}
+			}
+
+			c := b.Cursor()
+			for k, v := c.Seek(fkey); k != nil; k, _ = c.Next() {
+				if ts, err := unmarshalTS(k); err != nil {
+					log.Errorf("ERROR: decode event error: %v", err)
+				} else if ts >= f && ts <= t {
+					if filter == nil {
+						timestamps = append(timestamps, ts)
+					} else {
+						e := &Event{}
+						if err := e.unmarshal(v); err != nil {
+							log.Errorf("ERROR: unmarshal  event error: %v", err)
+							continue
+						}
+						if filter(e) {
+							timestamps = append(timestamps, ts)
+						}
+					}
+				}
+			}
+		}
+
+		return nil
+	})
+
+	return
+}
+
 type eventsByTime []*Event
 
 func (a eventsByTime) Len() int           { return len(a) }

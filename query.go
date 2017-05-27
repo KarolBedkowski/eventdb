@@ -217,6 +217,23 @@ func (q *Query) ExecuteDelete(db *DB, from, to time.Time) (deleted int, err erro
 	return
 }
 
+// ExecuteCount return list of timestamps selected by query
+func (q *Query) ExecuteCount(db *DB, from, to time.Time) (timestamps []int64, err error) {
+	for _, s := range q.queries {
+		matchF := s.match
+		if s.matchAny() {
+			matchF = nil
+			log.Debugf("Query %v executeCount - match all", q)
+		}
+		d, e := db.CountEvents(s.bucket, from, to, matchF)
+		if e != nil {
+			return nil, e
+		}
+		timestamps = append(timestamps, d...)
+	}
+	return
+}
+
 func (q *Query) String() string {
 	return fmt.Sprintf("Query{RawQuery='%v', queries=%s}", q.RawQuery, q.queries)
 }
