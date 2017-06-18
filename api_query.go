@@ -67,8 +67,8 @@ func (q *queryTargetResp) appendTS(ts int64, interval int64) {
 func (a *QueryHandler) onPost(w http.ResponseWriter, r *http.Request, l log.Logger) (int, interface{}) {
 	l = l.With("action", "QueryHandler.onPost")
 
-	qr := &queryReq{}
-	if err := json.NewDecoder(r.Body).Decode(qr); err != nil {
+	qr := queryReq{}
+	if err := json.NewDecoder(r.Body).Decode(&qr); err != nil {
 		l.Errorf("unmarshal error: %s", err)
 		return 442, "bad request"
 	}
@@ -77,12 +77,12 @@ func (a *QueryHandler) onPost(w http.ResponseWriter, r *http.Request, l log.Logg
 
 	from, err := parseTime(qr.Range.From)
 	if err != nil {
-		l.Debugf("wrong from date: %s", err.Error())
+		l.Debugf("wrong from date: %s", err)
 		return http.StatusBadRequest, "wrong from date: " + err.Error()
 	}
 	to, err := parseTime(qr.Range.To)
 	if err != nil {
-		l.Debugf("wrong to date: %s", err.Error())
+		l.Debugf("wrong to date: %s", err)
 		return http.StatusBadRequest, "wrong to date: " + err.Error()
 	}
 
@@ -119,7 +119,7 @@ func (a *QueryHandler) onPost(w http.ResponseWriter, r *http.Request, l log.Logg
 
 		q, err := ParseQuery(query)
 		if err != nil {
-			l.Infof("parse query error: %s", err.Error())
+			l.Infof("parse query error: %s", err)
 			return http.StatusBadRequest, "parse query error"
 		}
 
@@ -128,7 +128,11 @@ func (a *QueryHandler) onPost(w http.ResponseWriter, r *http.Request, l log.Logg
 			Datapoints: make([][]float64, 0),
 		}
 
-		timestamps, _ := q.ExecuteCount(a.DB, from, to)
+		timestamps, err := q.ExecuteCount(a.DB, from, to)
+		if err != nil {
+			l.Infof("execute count for '%s' error %s", query, err)
+			continue
+		}
 		sort.Sort(timestampsAsc(timestamps))
 
 		for _, ts := range timestamps {

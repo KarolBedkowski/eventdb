@@ -7,6 +7,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/pkg/errors"
 	"github.com/prometheus/common/log"
 	"strings"
 	"time"
@@ -101,7 +102,7 @@ func (s *subquery) simplify() {
 	}
 }
 
-func (s *subquery) String() string {
+func (s subquery) String() string {
 	return fmt.Sprintf("subquery{bucket=%v, cons=%v}", s.bucket, s.conds)
 }
 
@@ -193,7 +194,7 @@ func (q *Query) Execute(db *DB, from, to time.Time) (result []*Event, err error)
 		}
 		events, e := db.GetEvents(s.bucket, from, to, matchF)
 		if e != nil {
-			return nil, e
+			return nil, errors.Wrap(e, "db get events error")
 		}
 		result = append(result, events...)
 	}
@@ -210,7 +211,7 @@ func (q *Query) ExecuteDelete(db *DB, from, to time.Time) (deleted int, err erro
 		}
 		d, e := db.DeleteEvents(s.bucket, from, to, matchF)
 		if e != nil {
-			return 0, e
+			return 0, errors.Wrap(e, "db delete events error")
 		}
 		deleted += d
 	}
@@ -227,13 +228,13 @@ func (q *Query) ExecuteCount(db *DB, from, to time.Time) (timestamps []int64, er
 		}
 		d, e := db.CountEvents(s.bucket, from, to, matchF)
 		if e != nil {
-			return nil, e
+			return nil, errors.Wrap(e, "db count events error")
 		}
 		timestamps = append(timestamps, d...)
 	}
 	return
 }
 
-func (q *Query) String() string {
+func (q Query) String() string {
 	return fmt.Sprintf("Query{RawQuery='%v', queries=%s}", q.RawQuery, q.queries)
 }

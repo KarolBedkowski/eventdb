@@ -8,7 +8,7 @@
 package main
 
 import (
-	"fmt"
+	"github.com/pkg/errors"
 	"html/template"
 	"net/http"
 	"strings"
@@ -42,7 +42,7 @@ func (h queryPageHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	t, terr := template.New("webpage").Parse(tpl)
 	if terr != nil {
-		l.Errorf("template parse error: %s", terr.Error())
+		l.Errorf("template parse error: %s", terr)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -64,7 +64,7 @@ func (h queryPageHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	err = t.Execute(w, data)
 	if err != nil {
-		l.Errorf("template execute error: %s", err.Error())
+		l.Errorf("template execute error: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
 	}
 }
@@ -83,7 +83,7 @@ func (h *queryPageHandler) parseInput(r *http.Request) (data *queryPageData, err
 	} else {
 		data.toT, err = parseTime(data.To)
 		if err != nil {
-			return data, fmt.Errorf("parse TO error: %s", err)
+			return data, errors.Wrap(err, "parse TO error")
 		}
 	}
 
@@ -93,7 +93,7 @@ func (h *queryPageHandler) parseInput(r *http.Request) (data *queryPageData, err
 	} else {
 		data.fromT, err = parseTime(data.From)
 		if err != nil {
-			return data, fmt.Errorf("parse FROM error: %s", err)
+			return data, errors.Wrap(err, "parse FROM error")
 		}
 	}
 
@@ -109,12 +109,12 @@ func (d *queryPageData) loadEvents(h *queryPageHandler) (err error) {
 	var q *Query
 	q, err = ParseQuery(d.Query)
 	if err != nil {
-		return fmt.Errorf("parse query error: %s", err)
+		return errors.Wrap(err, "parse query error")
 	}
 
 	d.Events, err = q.Execute(h.DB, d.fromT, d.toT)
 	if err != nil {
-		return fmt.Errorf("get events error: %s", err)
+		return errors.Wrap(err, "get events error")
 	}
 
 	SortEventsByTime(d.Events)

@@ -5,14 +5,15 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"github.com/boltdb/bolt"
 	"github.com/boltdb/boltd"
+	"github.com/pkg/errors"
 	p "github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/log"
 	"net/http"
 	"os"
 	"strconv"
+	"syscall"
 	"time"
 )
 
@@ -30,20 +31,21 @@ type (
 
 // DBOpen open or create bolt database
 func DBOpen(conf *Configuration) (*DB, error) {
-	bdb, err := bolt.Open(conf.DBFile, 0600, &bolt.Options{Timeout: 10 * time.Second})
+	bdb, err := bolt.Open(conf.DBFile, 0600, &bolt.Options{
+		Timeout:   10 * time.Second,
+		MmapFlags: syscall.MAP_POPULATE,
+	})
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "open database error")
 	}
 
 	err = bdb.Update(func(tx *bolt.Tx) error {
-		if _, err := tx.CreateBucketIfNotExists([]byte(conf.DefaultBucket)); err != nil {
-			return fmt.Errorf("db create bucket error: %s", err.Error())
-		}
-		return nil
+		_, err := tx.CreateBucketIfNotExists([]byte(conf.DefaultBucket))
+		return errors.Wrapf(err, "create bucket %s error", conf.DefaultBucket)
 	})
 	if err != nil {
 		bdb.Close()
-		return nil, err
+		return nil, errors.Wrap(err, "update db error")
 	}
 
 	db := &DB{
@@ -100,10 +102,10 @@ func (db *DB) backupHandler(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Disposition", `attachment; filename="`+db.dbFilename+`"`)
 		w.Header().Set("Content-Length", strconv.Itoa(int(tx.Size())))
 		_, err := tx.WriteTo(w)
-		return err
+		return errors.Wrap(err, "tx writeto error")
 	})
 	if err != nil {
-		l.Errorf("backup error: %s", err.Error())
+		l.Errorf("backup error: %s", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 	l.Debugf("backup finished")

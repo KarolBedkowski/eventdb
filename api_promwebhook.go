@@ -67,8 +67,8 @@ func (k kv) String() string {
 func (p *PromWebHookHandler) onPost(w http.ResponseWriter, r *http.Request, l log.Logger) (int, interface{}) {
 	l = l.With("action", "PromWebHookHandler.onPost")
 
-	m := &webhookMessage{}
-	if err := json.NewDecoder(r.Body).Decode(m); err != nil {
+	m := webhookMessage{}
+	if err := json.NewDecoder(r.Body).Decode(&m); err != nil {
 		l.Debugf("decode body error: %s; %+v", err, r.Body)
 		return 442, "bad request"
 	}
@@ -86,7 +86,7 @@ func (p *PromWebHookHandler) onPost(w http.ResponseWriter, r *http.Request, l lo
 			continue
 		}
 
-		e := &Event{
+		e := Event{
 			Name: p.Configuration.PromWebHookConf.Bucket,
 			Time: a.StartsAt.UnixNano(),
 		}
@@ -135,7 +135,7 @@ func (p *PromWebHookHandler) onPost(w http.ResponseWriter, r *http.Request, l lo
 			}
 		}
 
-		if err := p.DB.SaveEvent(e); err != nil {
+		if err := p.DB.SaveEvent(&e); err != nil {
 			l.Errorf("save event error: %s", err)
 			eventAddError.Inc()
 		} else {

@@ -113,8 +113,7 @@ func main() {
 					pwh.Configuration = newConf
 					log.Info("configuration reloaded")
 				} else {
-					log.Errorf("reloading configuration err: %s", err)
-					log.Errorf("using old configuration")
+					log.Errorf("reloading configuration err: %s; configuration not changed", err)
 				}
 			}
 		}
@@ -179,7 +178,7 @@ func (v *vacuumWorker) Start() {
 					log.Infof("vacuum deleted %d to %s from %s", deleted, to, bucket)
 					deletedCntr.Add(float64(deleted))
 				} else {
-					log.Errorf("vacuum delete from %s error: %s", bucket, err.Error())
+					log.Errorf("vacuum delete from %s error: %s", bucket, err)
 				}
 			}
 			lastRun.SetToCurrentTime()

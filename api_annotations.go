@@ -52,8 +52,8 @@ type (
 func (a *AnnotationHandler) onPost(w http.ResponseWriter, r *http.Request, l log.Logger) (int, interface{}) {
 	l = l.With("action", "AnnotationHandler.onPost")
 
-	ar := &annotationReq{}
-	if err := json.NewDecoder(r.Body).Decode(ar); err != nil {
+	ar := annotationReq{}
+	if err := json.NewDecoder(r.Body).Decode(&ar); err != nil {
 		l.Errorf("unmarshal error: %s", err)
 		return 442, "bad request"
 	}
@@ -62,18 +62,18 @@ func (a *AnnotationHandler) onPost(w http.ResponseWriter, r *http.Request, l log
 
 	from, err := parseTime(ar.Range.From)
 	if err != nil {
-		l.Debugf("wrong from date: %s", err.Error())
-		return http.StatusBadRequest, "wrong from date: " + err.Error()
+		l.Debugf("wrong from date: %s", err)
+		return http.StatusBadRequest, "wrong from date"
 	}
 	to, err := parseTime(ar.Range.To)
 	if err != nil {
-		l.Debugf("wrong to date: %s", err.Error())
-		return http.StatusBadRequest, "wrong to date: " + err.Error()
+		l.Debugf("wrong to date: %s", err)
+		return http.StatusBadRequest, "wrong to date"
 	}
 
 	q, err := ParseQuery(ar.Annotation.Query)
 	if err != nil {
-		l.Infof("parse query error: %s", err.Error())
+		l.Infof("parse query error: %s", err)
 		return http.StatusBadRequest, "parse query error"
 	}
 

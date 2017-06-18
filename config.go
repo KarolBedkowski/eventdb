@@ -7,7 +7,7 @@
 package main
 
 import (
-	"fmt"
+	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"time"
@@ -60,21 +60,21 @@ func LoadConfiguration(filename string) (*Configuration, error) {
 	b, err := ioutil.ReadFile(filename)
 
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "read file %v failed", filename)
 	}
 
 	if err = yaml.Unmarshal(b, c); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "unmarshal error")
 	}
 
 	if err = c.validate(); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "validate error")
 	}
 
 	if c.Retention != "" {
 		r, err := time.ParseDuration(c.Retention)
 		if err != nil {
-			return nil, fmt.Errorf("parse retention time error: %s", err.Error())
+			return nil, errors.Wrap(err, "parse retention time error")
 		}
 		c.RetentionParsed = &r
 	}

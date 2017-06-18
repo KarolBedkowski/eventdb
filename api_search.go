@@ -28,8 +28,8 @@ type (
 func (s *SearchHandler) onPost(w http.ResponseWriter, r *http.Request, l log.Logger) (int, interface{}) {
 	l = l.With("action", "SearchHandler.onPost")
 
-	sr := &searchReq{}
-	if err := json.NewDecoder(r.Body).Decode(sr); err != nil {
+	sr := searchReq{}
+	if err := json.NewDecoder(r.Body).Decode(&sr); err != nil {
 		l.Errorf("unmarshal error: %s", err)
 		return 442, "bad request"
 	}
@@ -37,7 +37,7 @@ func (s *SearchHandler) onPost(w http.ResponseWriter, r *http.Request, l log.Log
 	buckets, err := s.DB.Buckets()
 	if err != nil {
 		l.Info("get buckets error: %s", err)
-		return http.StatusInternalServerError, err.Error()
+		return http.StatusInternalServerError, nil
 	}
 
 	buckets = append(buckets, "__all__")

@@ -57,7 +57,7 @@ func BenchmarkMarshal(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		e := data[i%1000]
 		if _, _, err := e.marshal(); err != nil {
-			b.Fatalf("marshal error: %s", err.Error())
+			b.Fatalf("marshal error: %s", err)
 		}
 	}
 }
@@ -71,7 +71,7 @@ func BenchmarkUnmarshal(b *testing.B) {
 		m := data[i%1000]
 		e := &Event{}
 		if err := e.unmarshal(m); err != nil {
-			b.Fatalf("unmarshal error: %s", err.Error())
+			b.Fatalf("unmarshal error: %s", err)
 		}
 	}
 }
@@ -84,7 +84,7 @@ func BenchmarkMarshallTS(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		e := data[i%1000]
 		if _, err := marshalTS(e.Time, nil); err != nil {
-			b.Fatalf("marshal error: %s", err.Error())
+			b.Fatalf("marshal error: %s", err)
 		}
 	}
 }
@@ -97,7 +97,7 @@ func BenchmarkUnmarshalTS(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		e := data[i%1000]
 		if _, err := unmarshalTS(e); err != nil {
-			b.Fatalf(" unmarshalTSerror: %s", err.Error())
+			b.Fatalf(" unmarshalTSerror: %s", err)
 		}
 	}
 }

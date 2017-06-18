@@ -56,13 +56,13 @@ type (
 func (e *eventsHandler) onPost(w http.ResponseWriter, r *http.Request, l log.Logger) (int, interface{}) {
 	l = l.With("action", "eventsHandler.onPost")
 
-	ev := &eventReq{}
-	if err := json.NewDecoder(r.Body).Decode(ev); err != nil {
+	ev := eventReq{}
+	if err := json.NewDecoder(r.Body).Decode(&ev); err != nil {
 		l.Debugf("body decode error: %s", err)
 		return 442, "bad request"
 	}
 
-	event := &Event{
+	event := Event{
 		Name:        ev.Name,
 		Summary:     ev.Summary,
 		Description: ev.Description,
@@ -106,8 +106,8 @@ func (e *eventsHandler) onPost(w http.ResponseWriter, r *http.Request, l log.Log
 		}
 	}
 
-	if err := e.DB.SaveEvent(event); err != nil {
-		log.Errorf("save event error: %s", err.Error())
+	if err := e.DB.SaveEvent(&event); err != nil {
+		log.Errorf("save event error: %s", err)
 		eventAddError.Inc()
 		return http.StatusInternalServerError, "error"
 	}
@@ -140,7 +140,7 @@ func (e *eventsHandler) onGet(w http.ResponseWriter, r *http.Request, l log.Logg
 		if fts, err := parseTime(vfrom); err == nil {
 			from = fts
 		} else {
-			l.Debugf("wrong from date: %s", err.Error())
+			l.Debugf("wrong from date: %s", err)
 			return http.StatusBadRequest, "wrong from date"
 		}
 	}
@@ -148,7 +148,7 @@ func (e *eventsHandler) onGet(w http.ResponseWriter, r *http.Request, l log.Logg
 		if tts, err := parseTime(vto); err == nil {
 			to = tts
 		} else {
-			l.Debugf("wrong to date: %s", err.Error())
+			l.Debugf("wrong to date: %s", err)
 			return http.StatusBadRequest, "wrong to date"
 		}
 	}
@@ -156,11 +156,15 @@ func (e *eventsHandler) onGet(w http.ResponseWriter, r *http.Request, l log.Logg
 	query := vars.Get("query")
 	q, err := ParseQuery(query)
 	if err != nil {
-		l.Infof("parse query error: %s", err.Error())
+		l.Infof("parse query error: %s", err)
 		return http.StatusBadRequest, "parse query error"
 	}
 
-	events, _ := q.Execute(e.DB, from, to)
+	events, err := q.Execute(e.DB, from, to)
+	if err != nil {
+		l.Infof("execute query error: %s", err)
+		return http.StatusBadRequest, "parse query error"
+	}
 
 	response := &eventsOnGetResp{
 		Header: &eventsOnGetRespHeader{
@@ -185,13 +189,13 @@ func (e *eventsHandler) onDelete(w http.ResponseWriter, r *http.Request, l log.L
 	if fts, err := parseTime(vars.Get("from")); err == nil {
 		from = fts
 	} else {
-		l.Debugf("wrong from date: %s", err.Error())
+		l.Debugf("wrong from date: %s", err)
 		return http.StatusBadRequest, "wrong 'from' date"
 	}
 	if tts, err := parseTime(vars.Get("to")); err == nil {
 		to = tts
 	} else {
-		l.Debugf("wrong to date: %s", err.Error())
+		l.Debugf("wrong to date: %s", err)
 		return http.StatusBadRequest, "wrong 'to' date"
 	}
 
@@ -203,7 +207,7 @@ func (e *eventsHandler) onDelete(w http.ResponseWriter, r *http.Request, l log.L
 	query := vars.Get("query")
 	q, err := ParseQuery(query)
 	if err != nil {
-		l.Infof("parse query error: %s", err.Error())
+		l.Infof("parse query error: %s", err)
 		return http.StatusBadRequest, "parse query error"
 	}
 
@@ -214,7 +218,7 @@ func (e *eventsHandler) onDelete(w http.ResponseWriter, r *http.Request, l log.L
 	if deleted, err := q.ExecuteDelete(e.DB, from, to); err == nil {
 		res.Deleted = deleted
 	} else {
-		l.Errorf("delete error: %s", err.Error())
+		l.Errorf("delete error: %s", err)
 		return http.StatusInternalServerError, "delete error"
 	}
 
@@ -255,7 +259,7 @@ func (b *bucketsHandler) onGet(w http.ResponseWriter, r *http.Request, l log.Log
 
 	buckets, err := b.DB.Buckets()
 	if err != nil {
-		l.Errorf("get events error: %s", err.Error())
+		l.Errorf("get events error: %s", err)
 		return http.StatusInternalServerError, nil
 	}
 

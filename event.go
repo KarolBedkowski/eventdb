@@ -4,9 +4,9 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"github.com/boltdb/bolt"
+	"github.com/pkg/errors"
 	"github.com/prometheus/common/log"
 	"hash/adler32"
 	"sort"
@@ -106,7 +106,7 @@ func (e *Event) marshal() ([]byte, []byte, error) {
 	// KEY: ts(int64)crc(4) (12bytes)
 	buf, err := e.Marshal(nil)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, errors.Wrap(err, "marshal event error")
 	}
 
 	key, err := marshalTS(e.Time, buf)
@@ -116,7 +116,7 @@ func (e *Event) marshal() ([]byte, []byte, error) {
 		buf = append([]byte{1}, buf...)
 	}
 
-	return buf, key, err
+	return buf, key, errors.Wrap(err, "marshal ts error")
 }
 
 // SaveEvent to database
@@ -124,7 +124,7 @@ func (db *DB) SaveEvent(e *Event) error {
 	return db.db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucketIfNotExists([]byte(e.Name))
 		if err != nil {
-			return err
+			return errors.Wrapf(err, "create bucket '%v' error", e.Name)
 		}
 
 		b.FillPercent = 0.999
@@ -134,7 +134,7 @@ func (db *DB) SaveEvent(e *Event) error {
 			return b.Put(key, data)
 		}
 
-		return err
+		return errors.Wrap(err, "marshal error")
 	})
 }
 
@@ -146,7 +146,7 @@ func (db *DB) DeleteEvents(bucket string, from, to time.Time, filter func(*Event
 	err = db.db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(bucket))
 		if b == nil {
-			return fmt.Errorf("unknown bucket name: %v", bucket)
+			return errors.Errorf("unknown bucket name: %v", bucket)
 		}
 
 		b.FillPercent = 0.999
@@ -182,7 +182,7 @@ func (db *DB) DeleteEvents(bucket string, from, to time.Time, filter func(*Event
 
 			for _, k := range keys {
 				if err := b.Delete(k); err != nil {
-					return err
+					return errors.Wrap(err, "delete error")
 				}
 			}
 
@@ -203,7 +203,7 @@ func (db *DB) GetEvents(bucket string, from, to time.Time, filter func(*Event) b
 	f := from.UnixNano()
 	t := to.UnixNano()
 	if t < f {
-		return nil, fmt.Errorf("wrong time range (from > to)")
+		return nil, errors.Errorf("wrong time range (from > to)")
 	}
 
 	var events []*Event
@@ -211,7 +211,7 @@ func (db *DB) GetEvents(bucket string, from, to time.Time, filter func(*Event) b
 	err := db.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(bucket))
 		if b == nil {
-			return fmt.Errorf("unknown bucket name: %v", bucket)
+			return errors.Errorf("unknown bucket name: %v", bucket)
 		}
 
 		fkey, err := marshalTS(f, nil)
@@ -224,19 +224,19 @@ func (db *DB) GetEvents(bucket string, from, to time.Time, filter func(*Event) b
 
 		for k, v := c.Seek(fkey); k != nil; k, v = c.Next() {
 			if ts, err := unmarshalTS(k); err != nil {
-				log.Errorf("ERROR: decode event ts error: %s", err.Error())
+				log.Errorf("ERROR: decode event ts error: %s", err)
 			} else if ts >= f && ts <= t {
 				var err error
 				e := &Event{}
 
 				if v == nil || len(v) < 2 {
-					err = fmt.Errorf("invalid data")
+					err = errors.Errorf("invalid data: '%v'", v)
 				} else {
 					switch v[0] {
 					case 1:
-						err = e.unmarshal(v)
+						err = errors.Wrapf(e.unmarshal(v), "unmarshal '%v' error", v)
 					default:
-						err = fmt.Errorf("invalid version: %v", v[0])
+						err = errors.Errorf("invalid version: %v", v[0])
 					}
 				}
 
@@ -263,7 +263,7 @@ func (db *DB) CountEvents(bucket string, from, to time.Time, filter func(*Event)
 	err = db.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(bucket))
 		if b == nil {
-			return fmt.Errorf("unknown bucket name: %v", bucket)
+			return errors.Errorf("unknown bucket name: %v", bucket)
 		}
 
 		{
