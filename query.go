@@ -13,60 +13,55 @@ import (
 	"time"
 )
 
-type condition interface {
-	match(e *Event) bool
-	String() string
+const (
+	conditionAny int = iota
+	conditionTag
+	conditionCol
+)
+
+type condition struct {
+	kind int
+	arg  string
+	val  string
 }
 
-type conditionTag struct {
-	tag string
-}
-
-func (c conditionTag) match(e *Event) bool {
-	for _, t := range e.Tags {
-		if t == c.tag {
-			return true
+func (c *condition) match(e *Event) bool {
+	switch c.kind {
+	case conditionAny:
+		return true
+	case conditionTag:
+		for _, t := range e.Tags {
+			if t == c.val {
+				return true
+			}
 		}
+		return false
+	case conditionCol:
+		for _, o := range e.Cols {
+			if o.Name == c.arg {
+				return o.Value == c.val
+			}
+		}
+		return false
 	}
 	return false
 }
 
-func (c conditionTag) String() string {
-	return fmt.Sprintf("{conditionTag: %s}", c.tag)
-}
-
-type conditionCol struct {
-	col string
-	val string
-}
-
-func (c conditionCol) match(e *Event) bool {
-	for _, o := range e.Cols {
-		if o.Name == c.col {
-			return o.Value == c.val
-		}
+func (c condition) String() string {
+	switch c.kind {
+	case conditionAny:
+		return "{conditionMatchAll}"
+	case conditionTag:
+		return fmt.Sprintf("{conditionTag: %s}", c.val)
+	case conditionCol:
+		return fmt.Sprintf("{conditionCol: %s=%s}", c.arg, c.val)
 	}
-	return false
-}
-
-func (c conditionCol) String() string {
-	return fmt.Sprintf("{conditionCol: %s=%s}", c.col, c.val)
-}
-
-type conditionMatchAll struct {
-}
-
-func (c conditionMatchAll) match(e *Event) bool {
-	return true
-}
-
-func (c conditionMatchAll) String() string {
-	return "{conditionMatchAll}"
+	return "unknown"
 }
 
 type subquery struct {
 	bucket string
-	conds  [][]condition
+	conds  [][]*condition
 }
 
 func (s *subquery) match(e *Event) bool {
@@ -85,7 +80,7 @@ o:
 func (s *subquery) matchAny() bool {
 	for _, c := range s.conds {
 		if len(c) == 1 {
-			if _, ok := c[0].(*conditionMatchAll); ok {
+			if c[0].kind == conditionAny {
 				return true
 			}
 		}
@@ -97,7 +92,7 @@ func (s *subquery) simplify() {
 	if s.matchAny() {
 		if len(s.conds) > 1 {
 			log.Debugf("subquery %v simplfied to conditionMatchAll", s)
-			s.conds = [][]condition{[]condition{&conditionMatchAll{}}}
+			s.conds = [][]*condition{[]*condition{&condition{kind: conditionAny}}}
 		}
 	}
 }
@@ -137,7 +132,7 @@ func ParseQuery(query string) (q *Query, err error) {
 
 		log.Debugf("parse: '%v'", sq)
 
-		var conds []condition
+		var conds []*condition
 		p := strings.SplitN(sq, ":", 2)
 		if len(p) > 1 && p[1] != "" {
 			for _, pr := range strings.Split(p[1], ",") {
@@ -149,15 +144,15 @@ func ParseQuery(query string) (q *Query, err error) {
 				v := strings.TrimSpace(kv[1])
 				switch k {
 				case "_tag":
-					conds = append(conds, &conditionTag{tag: v})
+					conds = append(conds, &condition{kind: conditionTag, val: v})
 				default:
-					conds = append(conds, &conditionCol{col: k, val: v})
+					conds = append(conds, &condition{kind: conditionCol, arg: k, val: v})
 				}
 			}
 		}
 
 		if len(conds) == 0 {
-			conds = []condition{&conditionMatchAll{}}
+			conds = []*condition{&condition{kind: conditionAny}}
 		}
 
 		bucket := strings.TrimSpace(p[0])
@@ -167,7 +162,7 @@ func ParseQuery(query string) (q *Query, err error) {
 		} else {
 			qpb[bucket] = &subquery{
 				bucket: bucket,
-				conds:  [][]condition{conds},
+				conds:  [][]*condition{conds},
 			}
 		}
 	}
