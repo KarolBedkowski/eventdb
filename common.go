@@ -10,7 +10,7 @@ package main
 import (
 	"fmt"
 	"strconv"
-	"strings"
+	//	"strings"
 	"time"
 )
 
@@ -67,6 +67,7 @@ func numToUnixNano(ts int64) int64 {
 	return ts * 1000000000
 }
 
+/*
 func parseName(n string) (name string, tags []string) {
 	if n == "" {
 		return "", nil
@@ -81,3 +82,4 @@ func parseName(n string) (name string, tags []string) {
 	}
 	return
 }
+*/

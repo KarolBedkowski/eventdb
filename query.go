@@ -113,7 +113,7 @@ func ParseQuery(query string) (q *Query, err error) {
 	log.Debugf("ParseQuery: '%v'", query)
 
 	// map bucket -> subquery
-	qpb := make(map[string]*subquery, 0)
+	qpb := make(map[string]*subquery)
 
 	// temporary map  query -> bool for removing doubled
 	loadedQuery := make(map[string]bool)

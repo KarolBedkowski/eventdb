@@ -30,7 +30,7 @@ func generateEvents() []*Event {
 }
 
 func prepareTestEvents() [][]byte {
-	m := make([][]byte, 1000, 1000)
+	m := make([][]byte, 1000)
 	var err error
 	for i, e := range generateEvents() {
 		m[i], _, err = e.marshal()
@@ -42,7 +42,7 @@ func prepareTestEvents() [][]byte {
 }
 
 func prepareTestTS() [][]byte {
-	m := make([][]byte, 1000, 1000)
+	m := make([][]byte, 1000)
 	for i := int64(0); i < 1000; i++ {
 		m[i], _ = marshalTS((i*100)<<10, nil)
 	}
@@ -217,7 +217,7 @@ func TestMarshalEventCompare(t *testing.T) {
 			tsin := int64(j << i)
 			ts1, _ := marshalTS(tsin, nil)
 			ts2, _ := marshalTS(tsin, nil)
-			if bytes.Compare(ts1, ts2) != 0 {
+			if !bytes.Equal(ts1, ts2) {
 				t.Fatalf("marshalTS wrong values: %v != %v", ts1, ts2)
 			}
 		}

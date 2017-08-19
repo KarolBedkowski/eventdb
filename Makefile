@@ -30,6 +30,8 @@ build_pi: *.schema.gen.go
 		GOARCH=arm GOARM=6 \
 		go build -v -o eventdb-arm --ldflags $(LDFLAGS_PI)
 
+eventdb-arm: build_pi
+
 install_pi: eventdb-arm
 	ssh pi "systemctl --user stop eventdb"
 	ssh pi "[ -f ~/eventdb/eventdb-arm ] && mv -f ~/eventdb/eventdb-arm ~/eventdb/eventdb-arm.old"
@@ -46,5 +48,7 @@ clean:
 
 %.schema.gen.go: %.schema
 	gencode go -schema $< -package main
+
+.PHONY: build build_pi install_pi run clean
 
 # vim:ft=make

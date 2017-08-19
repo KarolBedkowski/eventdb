@@ -98,30 +98,28 @@ func main() {
 	signal.Notify(hup, syscall.SIGHUP)
 	go func() {
 		for {
-			select {
-			case <-hup:
-				systemd.NotifyStatus("reloading")
-				if newConf, err := LoadConfiguration(*configFile); err == nil {
-					log.Debugf("new configuration: %+v", newConf)
-					apiHandler.Configuration = newConf
-					apiBucketsHandler.Configuration = newConf
-					vw.Configuration = newConf
-					ah.Configuration = newConf
-					qh.Configuration = newConf
-					sh.Configuration = newConf
-					hh.Configuration = newConf
-					pwh.Configuration = newConf
-					log.Info("configuration reloaded")
-				} else {
-					log.Errorf("reloading configuration err: %s; configuration not changed", err)
-				}
+			<-hup
+			systemd.NotifyStatus("reloading")
+			if newConf, err := LoadConfiguration(*configFile); err == nil {
+				log.Debugf("new configuration: %+v", newConf)
+				apiHandler.Configuration = newConf
+				apiBucketsHandler.Configuration = newConf
+				vw.Configuration = newConf
+				ah.Configuration = newConf
+				qh.Configuration = newConf
+				sh.Configuration = newConf
+				hh.Configuration = newConf
+				pwh.Configuration = newConf
+				log.Info("configuration reloaded")
+			} else {
+				log.Errorf("reloading configuration err: %s; configuration not changed", err)
 			}
 		}
 	}()
 
 	// cleanup
 	cleanChannel := make(chan os.Signal, 1)
-	signal.Notify(cleanChannel, os.Interrupt, syscall.SIGTERM, syscall.SIGKILL)
+	signal.Notify(cleanChannel, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-cleanChannel
 		log.Info("Closing...")
