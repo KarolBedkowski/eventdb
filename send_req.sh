@@ -18,6 +18,59 @@ function send_event() {
 EOF
 }
 
+function send_event_prom() {
+	local now
+	now=$(date +%s)
+
+	cat <<EOF | curl -s --data-binary @- "http://127.0.0.1:9701/api/v1/promwebhook"
+{
+  "receiver": "team-X-mails",
+  "status": "firing",
+  "alerts": [
+    {
+      "status": "firing",
+      "labels": {
+        "alertname": "TemperatureHigh",
+        "chip": "i2c",
+        "instance": "localhost:9100",
+        "job": "node",
+        "name": "node",
+        "sensor": "cpu",
+        "severity": "critical"
+      },
+      "annotations": {
+        "description": "localhost:9100 / cpu temp 58.25 > 55C for more than 5 minutes.",
+        "summary": "Instance localhost:9100 temp cpu VERY HIGH"
+      },
+      "startsAt": "2018-01-01T02:03:04.159784674+01:00",
+      "endsAt": "0001-01-01T00:00:00Z",
+      "generatorURL": "http://localhost:9090/graph?g0.expr=temperature"
+    }
+  ],
+  "groupLabels": {
+    "alertname": "TemperatureHigh",
+    "instance": "localhost:9100"
+  },
+  "commonLabels": {
+    "alertname": "TemperatureHigh",
+    "chip": "i2c",
+    "instance": "localhost:9100",
+    "job": "node",
+    "name": "node",
+    "sensor": "cpu",
+    "severity": "critical"
+  },
+  "commonAnnotations": {
+    "description": "localhost:9100 / cpu temp 58.25 > 55C for more than 5 minutes.",
+    "summary": "Instance localhost:9100 temp cpu VERY HIGH"
+  },
+  "externalURL": "http://localhost:9093",
+  "version": "4",
+  "groupKey": "{}:{alertname=\"TemperatureHigh\", instance=\"debian.work:9100\"}"
+}
+
+EOF
+}
 
 function generate_events() {
 	local start end d local t1 v1
@@ -123,6 +176,7 @@ if [[ $# == 0 ]]; then
 	cat <<EOF
 Usage:
 	$0 send_event
+	$0 send_event_prom
 	$0 generate_events
 	$0 get_ann
 	$0 get_events
