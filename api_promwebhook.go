@@ -42,7 +42,7 @@ type (
 		ExternalURL string `json:"externalURL"`
 
 		Version  string `json:"version"`
-		GroupKey uint64 `json:"groupKey"`
+		GroupKey string `json:"groupKey"`
 	}
 
 	// PromWebHookHandler handle all request from AlertManager
