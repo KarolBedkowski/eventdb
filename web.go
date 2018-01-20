@@ -14,7 +14,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/prometheus/common/log"
 )
 
 type queryPageHandler struct {

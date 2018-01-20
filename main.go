@@ -16,7 +16,6 @@ import (
 	"github.com/Merovius/systemd"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/prometheus/common/log"
 	"github.com/prometheus/common/version"
 )
 
@@ -26,6 +25,9 @@ var (
 		"Path to configuration file.")
 	listenAddress = flag.String("web.listen-address", ":9701",
 		"Address to listen on for web interface and telemetry.")
+	loglevel = flag.String("log.level", "info",
+		"Logging level (debug, info, warn, error, fatal)")
+	logFile = flag.String("log.file", "", "Write log to given file")
 )
 
 func init() {
@@ -39,6 +41,8 @@ func main() {
 		fmt.Fprintln(os.Stdout, version.Print("eventdb"))
 		os.Exit(0)
 	}
+
+	InitializeLogger(*loglevel, *logFile)
 
 	systemd.NotifyStatus("starting")
 	systemd.AutoWatchdog()

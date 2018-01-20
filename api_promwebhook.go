@@ -10,7 +10,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/prometheus/common/log"
 	"net/http"
 	"strings"
 	"time"
@@ -64,7 +63,7 @@ func (k kv) String() string {
 	return strings.Join(out, "\n")
 }
 
-func (p *PromWebHookHandler) onPost(w http.ResponseWriter, r *http.Request, l log.Logger) (int, interface{}) {
+func (p *PromWebHookHandler) onPost(w http.ResponseWriter, r *http.Request, l *logger) (int, interface{}) {
 	l = l.With("action", "PromWebHookHandler.onPost")
 
 	m := webhookMessage{}

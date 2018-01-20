@@ -8,7 +8,6 @@ package main
 import (
 	"fmt"
 	"github.com/pkg/errors"
-	"github.com/prometheus/common/log"
 	"strings"
 	"time"
 )

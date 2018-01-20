@@ -9,7 +9,6 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/prometheus/common/log"
 	"net/http"
 )
 
@@ -25,7 +24,7 @@ type (
 	}
 )
 
-func (s *SearchHandler) onPost(w http.ResponseWriter, r *http.Request, l log.Logger) (int, interface{}) {
+func (s *SearchHandler) onPost(w http.ResponseWriter, r *http.Request, l *logger) (int, interface{}) {
 	l = l.With("action", "SearchHandler.onPost")
 
 	sr := searchReq{}
@@ -45,7 +44,7 @@ func (s *SearchHandler) onPost(w http.ResponseWriter, r *http.Request, l log.Log
 	return http.StatusOK, buckets
 }
 
-func (s *SearchHandler) onOptions(w http.ResponseWriter, r *http.Request, l log.Logger) (int, interface{}) {
+func (s *SearchHandler) onOptions(w http.ResponseWriter, r *http.Request, l *logger) (int, interface{}) {
 	return http.StatusOK, ""
 }
 

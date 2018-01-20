@@ -9,7 +9,6 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/prometheus/common/log"
 	"net/http"
 	"sort"
 	"strings"
@@ -64,7 +63,7 @@ func (q *queryTargetResp) appendTS(ts int64, interval int64) {
 	}
 }
 
-func (a *QueryHandler) onPost(w http.ResponseWriter, r *http.Request, l log.Logger) (int, interface{}) {
+func (a *QueryHandler) onPost(w http.ResponseWriter, r *http.Request, l *logger) (int, interface{}) {
 	l = l.With("action", "QueryHandler.onPost")
 
 	qr := queryReq{}
@@ -157,7 +156,7 @@ func (a timestampsAsc) Len() int           { return len(a) }
 func (a timestampsAsc) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a timestampsAsc) Less(i, j int) bool { return a[i] < a[j] }
 
-func (a *QueryHandler) onOptions(w http.ResponseWriter, r *http.Request, l log.Logger) (int, interface{}) {
+func (a *QueryHandler) onOptions(w http.ResponseWriter, r *http.Request, l *logger) (int, interface{}) {
 	return http.StatusOK, ""
 }
 

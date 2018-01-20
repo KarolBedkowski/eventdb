@@ -9,7 +9,6 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/prometheus/common/log"
 	"net/http"
 	"strings"
 )
@@ -49,7 +48,7 @@ type (
 	}
 )
 
-func (a *AnnotationHandler) onPost(w http.ResponseWriter, r *http.Request, l log.Logger) (int, interface{}) {
+func (a *AnnotationHandler) onPost(w http.ResponseWriter, r *http.Request, l *logger) (int, interface{}) {
 	l = l.With("action", "AnnotationHandler.onPost")
 
 	ar := annotationReq{}
@@ -109,7 +108,7 @@ func (a *AnnotationHandler) onPost(w http.ResponseWriter, r *http.Request, l log
 	return http.StatusOK, resp
 }
 
-func (a *AnnotationHandler) onOptions(w http.ResponseWriter, r *http.Request, l log.Logger) (int, interface{}) {
+func (a *AnnotationHandler) onOptions(w http.ResponseWriter, r *http.Request, l *logger) (int, interface{}) {
 	return http.StatusOK, ""
 }
 

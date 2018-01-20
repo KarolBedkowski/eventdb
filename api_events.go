@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/common/log"
 )
 
 var (
@@ -53,7 +52,7 @@ type (
 	}
 )
 
-func (e *eventsHandler) onPost(w http.ResponseWriter, r *http.Request, l log.Logger) (int, interface{}) {
+func (e *eventsHandler) onPost(w http.ResponseWriter, r *http.Request, l *logger) (int, interface{}) {
 	l = l.With("action", "eventsHandler.onPost")
 
 	ev := eventReq{}
@@ -127,7 +126,7 @@ type eventsOnGetResp struct {
 	Events []*Event
 }
 
-func (e *eventsHandler) onGet(w http.ResponseWriter, r *http.Request, l log.Logger) (int, interface{}) {
+func (e *eventsHandler) onGet(w http.ResponseWriter, r *http.Request, l *logger) (int, interface{}) {
 	l = l.With("action", "eventsHandler.onGet")
 
 	r.ParseForm()
@@ -178,7 +177,7 @@ func (e *eventsHandler) onGet(w http.ResponseWriter, r *http.Request, l log.Logg
 	return http.StatusOK, response
 }
 
-func (e *eventsHandler) onDelete(w http.ResponseWriter, r *http.Request, l log.Logger) (int, interface{}) {
+func (e *eventsHandler) onDelete(w http.ResponseWriter, r *http.Request, l *logger) (int, interface{}) {
 	l = l.With("action", "eventsHandler.onDelete")
 
 	r.ParseForm()
@@ -254,7 +253,7 @@ type bucketsHandler struct {
 	DB            *DB
 }
 
-func (b *bucketsHandler) onGet(w http.ResponseWriter, r *http.Request, l log.Logger) (int, interface{}) {
+func (b *bucketsHandler) onGet(w http.ResponseWriter, r *http.Request, l *logger) (int, interface{}) {
 	l = l.With("action", "bucketsHandler.onGet")
 
 	buckets, err := b.DB.Buckets()

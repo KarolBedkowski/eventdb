@@ -9,7 +9,6 @@ import (
 	"github.com/boltdb/boltd"
 	"github.com/pkg/errors"
 	p "github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/common/log"
 	"net/http"
 	"os"
 	"strconv"

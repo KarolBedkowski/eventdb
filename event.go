@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"github.com/boltdb/bolt"
 	"github.com/pkg/errors"
-	"github.com/prometheus/common/log"
 	"hash/adler32"
 	"sort"
 	"strings"
