@@ -139,7 +139,10 @@ func (db *DB) SaveEvent(e *Event) error {
 
 // DeleteEvents from database according to `from`-`to` time range and bucket `name`
 func (db *DB) DeleteEvents(bucket string, from, to time.Time, filter func(*Event) bool) (deleted int, err error) {
-	f := from.UnixNano()
+	var f int64 = 0
+	if !from.IsZero() {
+		f = from.UnixNano()
+	}
 	t := to.UnixNano()
 
 	err = db.db.Update(func(tx *bolt.Tx) error {

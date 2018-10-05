@@ -151,8 +151,6 @@ type vacuumWorker struct {
 }
 
 func (v *vacuumWorker) Start() {
-	time.Sleep(1 * time.Minute)
-
 	deletedCntr := prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Name: "eventdb_vacuum_events_deleted_total",
@@ -169,6 +167,8 @@ func (v *vacuumWorker) Start() {
 
 	prometheus.MustRegister(deletedCntr)
 	prometheus.MustRegister(lastRun)
+
+	time.Sleep(1 * time.Minute)
 
 	for {
 		if v.Configuration.RetentionParsed != nil {
